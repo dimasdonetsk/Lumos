@@ -24,7 +24,7 @@ namespace Lumos
         private string? _seededScope;
         private bool _hintShown;
         private bool _lastEmergency;
-        private bool _forceShow;
+        private System.Drawing.Point? _lastAnchor;
         private bool _fetching;
 
         public void Start()
@@ -34,7 +34,7 @@ namespace Lumos
             AutostartHelper.Apply(Settings.Autostart);
 
             _vm.QueuePicked += SetQueue;
-            _window = new OverlayWindow(_vm) { Position = Settings.Position };
+            _window = new OverlayWindow(_vm);
             _tray = new TrayController(this);
 
             _tick.Tick += (_, _) => Update();
@@ -104,7 +104,6 @@ namespace Lumos
             if (!needsSetup)
                 CheckNotifications(status, today, tomorrow, emergency, nowMinutes, todayKey, tomorrowKey, region!, queue!);
 
-            UpdateVisibility(status.Kind);
         }
 
         // ───────────────────────────── сповіщення ─────────────────────────────
@@ -162,41 +161,36 @@ namespace Lumos
 
         // ───────────────────────────── плашка ─────────────────────────────
 
-        private void UpdateVisibility(StatusKind kind)
+        /// <summary>Відкрити карточку з графіком над точкою на екрані (зазвичай над значком у треї).</summary>
+        public void ShowSchedule(System.Drawing.Point anchorPx)
         {
-            if (_window == null) return;
-            bool hide = !_forceShow &&
-                        (Settings.Position == "TrayOnly" || (Settings.HideWhenOn && kind == StatusKind.On));
-            if (hide)
-            {
-                if (_window.IsVisible) _window.Hide();
-            }
-            else if (!_window.IsVisible)
-            {
-                _window.Show();
-                _window.Reposition();
-            }
-        }
-
-        public void ShowSchedule()
-        {
-            _forceShow = true;
+            _lastAnchor = anchorPx;
             _vm.OpenSchedule();
             Update();
+            _window?.ShowAt(anchorPx);
         }
 
-        public void ToggleFromTray()
+        public void ShowSchedule() => ShowSchedule(_lastAnchor ?? DefaultAnchor());
+
+        /// <summary>Лівий клік по значку: відкрити або закрити.</summary>
+        public void ToggleFromTray(System.Drawing.Point anchorPx)
         {
-            if (_window != null && _window.IsVisible && _vm.IsScheduleOpen)
+            if (_window == null) return;
+            // Клік по значку спершу ховає вікно (воно втрачає фокус), тож не відкриваємо його одразу знову.
+            if (_window.IsVisible || (DateTime.Now - _window.LastHidden).TotalMilliseconds < 400)
             {
-                _forceShow = false;
-                _vm.CollapseCommand.Execute(null);
-                Update();
+                _window.HideFlyout();
+                return;
             }
-            else
-            {
-                ShowSchedule();
-            }
+            ShowSchedule(anchorPx);
+        }
+
+        private static System.Drawing.Point DefaultAnchor()
+        {
+            // Правий нижній кут основного екрана, біля годинника.
+            System.Drawing.Rectangle area = System.Windows.Forms.Screen.PrimaryScreen?.WorkingArea
+                                            ?? new System.Drawing.Rectangle(0, 0, 1920, 1040);
+            return new System.Drawing.Point(area.Right - 120, area.Bottom - 10);
         }
 
         // ───────────────────────────── налаштування ─────────────────────────────
@@ -205,8 +199,9 @@ namespace Lumos
         {
             Settings.RegionId = regionId;
             RegionData? region = Snapshot?.Find(regionId);
-            if (region != null && (Settings.Queue == null || !region.Queues.ContainsKey(Settings.Queue)))
-                Settings.Queue = region.SortedQueues().FirstOrDefault();
+            // Чергу не вгадуємо: якщо в новій області такої немає, людина обирає сама.
+            if (region == null || Settings.Queue == null || !region.Queues.ContainsKey(Settings.Queue))
+                Settings.Queue = null;
             Settings.Save();
             ShowSchedule();
         }
@@ -227,12 +222,6 @@ namespace Lumos
 
             if (Settings.Autostart != oldAutostart) AutostartHelper.Apply(Settings.Autostart);
             if (Settings.Theme != oldTheme) Theme.Apply(Settings.Theme == "Light");
-            if (_window != null)
-            {
-                _window.Position = Settings.Position;
-                _window.Reposition();
-            }
-            _forceShow = false;
             Update();
         }
 

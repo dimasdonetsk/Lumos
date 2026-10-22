@@ -61,13 +61,16 @@ namespace Lumos
 
         // Стан вигляду
         private bool _isPill;
-        private bool _scheduleOpen;
+        private bool _scheduleOpen = true;
         private bool _showTomorrow;
+
+        /// <summary>Кнопка «закрити» на карточці.</summary>
+        public event Action? CloseRequested;
 
         public OverlayViewModel()
         {
             ExpandCommand = new RelayCommand(() => { _isPill = false; Render(); LayoutChanged?.Invoke(); });
-            CollapseCommand = new RelayCommand(() => { _isPill = true; _scheduleOpen = false; Render(); LayoutChanged?.Invoke(); });
+            CollapseCommand = new RelayCommand(() => CloseRequested?.Invoke());
             ToggleScheduleCommand = new RelayCommand(() => { _scheduleOpen = !_scheduleOpen; Render(); LayoutChanged?.Invoke(); });
             TodayCommand = new RelayCommand(() => { _showTomorrow = false; Render(); LayoutChanged?.Invoke(); });
             TomorrowCommand = new RelayCommand(() => { _showTomorrow = true; Render(); LayoutChanged?.Invoke(); });
@@ -201,8 +204,11 @@ namespace Lumos
 
                 default:
                     StatusBrush = Theme.StatusGrey; TileBrush = Theme.TileGrey; IconOff = true;
-                    Title = _needsSetup ? "Оберіть область і чергу" : "Немає даних";
-                    Detail = _needsSetup ? "Правий клік по іконці в треї" : "Не вдалося отримати графік, спробуємо ще";
+                    Title = !_needsSetup ? "Немає даних"
+                          : _regionName.Length == 0 ? "Оберіть область і чергу" : "Оберіть свою чергу";
+                    Detail = !_needsSetup ? "Не вдалося отримати графік, спробуємо ще"
+                           : _regionName.Length == 0 ? "Правий клік по іконці в треї → Область"
+                           : "Кнопки внизу або правий клік → Черга";
                     BigText = ""; BigLabel = "";
                     PillText = _needsSetup ? "налаштувати" : "—";
                     TrayText = Title;
@@ -211,7 +217,7 @@ namespace Lumos
 
             string updated = _fetchedAt == default ? "ще не оновлено" : "оновлено " + _fetchedAt.ToString("HH:mm");
             Footer = _needsSetup
-                ? "Lumos · " + updated
+                ? (_regionName.Length > 0 ? _regionName + " · " : "Lumos · ") + updated
                 : _regionName + " · черга " + _queue + " · " + updated + (_fromCache ? " · офлайн" : "");
 
             RenderDay(now);
@@ -239,10 +245,13 @@ namespace Lumos
                 }
                 else
                 {
-                    NoDayTitle = _needsSetup ? "Оберіть область і чергу" : "Графіка на сьогодні немає";
-                    NoDayHint = _needsSetup
-                        ? "Правий клік по іконці в треї → Область і Черга."
-                        : "Можливо, відключень не планують або джерело ще не оновилося.";
+                    NoDayTitle = !_needsSetup ? "Графіка на сьогодні немає"
+                               : _regionName.Length == 0 ? "Оберіть область і чергу" : "Оберіть свою чергу";
+                    NoDayHint = !_needsSetup
+                        ? "Можливо, відключень не планують або джерело ще не оновилося."
+                        : _regionName.Length == 0
+                            ? "Правий клік по іконці в треї → Область, потім Черга."
+                            : "Свою чергу можна знайти за адресою на сайті обленерго або в його Telegram-боті.";
                 }
                 return;
             }

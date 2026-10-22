@@ -16,6 +16,7 @@ namespace Lumos
         private readonly WF.NotifyIcon _icon;
         private readonly WF.ContextMenuStrip _menu;
         private StatusKind? _iconKind;
+        private System.Drawing.Point _menuAnchor;
 
         // Області, для яких графік зараз неможливо отримати.
         private static readonly (string Name, string Why)[] NotPublished =
@@ -42,7 +43,7 @@ namespace Lumos
                 BackColor = DarkMenuRenderer.Back,
                 ForeColor = DarkMenuRenderer.Text,
             };
-            _menu.Opening += (_, _) => BuildMenu();
+            _menu.Opening += (_, _) => { _menuAnchor = WF.Cursor.Position; BuildMenu(); };
 
             _icon = new WF.NotifyIcon
             {
@@ -53,7 +54,7 @@ namespace Lumos
             };
             _icon.MouseClick += (_, e) =>
             {
-                if (e.Button == WF.MouseButtons.Left) _app.ToggleFromTray();
+                if (e.Button == WF.MouseButtons.Left) _app.ToggleFromTray(WF.Cursor.Position);
             };
             _icon.BalloonTipClicked += (_, _) => _app.ShowSchedule();
         }
@@ -88,7 +89,7 @@ namespace Lumos
             _menu.Items.Clear();
 
             Add(_menu.Items, Item("Оновити зараз", () => _app.RefreshNow()));
-            Add(_menu.Items, Item("Показати графік", () => _app.ShowSchedule()));
+            Add(_menu.Items, Item("Показати графік", () => _app.ShowSchedule(_menuAnchor)));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
             // Область
@@ -129,15 +130,6 @@ namespace Lumos
             Add(_menu.Items, Toggle("Звук перед відключенням", s.Sound, v => _app.Change(x => x.Sound = v)));
             Add(_menu.Items, Toggle("Сповіщення перед відключенням", s.Notify, v => _app.Change(x => x.Notify = v)));
             Add(_menu.Items, Toggle("Сповіщати про новий графік", s.NotifyNewSchedule, v => _app.Change(x => x.NotifyNewSchedule = v)));
-
-            var place = Sub("Де показувати");
-            foreach ((string label, string value) in new[] { ("Вгорі по центру", "TopCenter"), ("Вгорі ліворуч", "TopLeft"), ("Вгорі праворуч", "TopRight"), ("Лише іконка в треї", "TrayOnly") })
-            {
-                string v = value;
-                place.DropDownItems.Add(Radio(label, s.Position == v, () => _app.Change(x => x.Position = v)));
-            }
-            Add(_menu.Items, place);
-            Add(_menu.Items, Toggle("Ховати, коли світло є", s.HideWhenOn, v => _app.Change(x => x.HideWhenOn = v)));
 
             var theme = Sub("Тема");
             theme.DropDownItems.Add(Radio("Темна (сливова)", s.Theme != "Light", () => _app.Change(x => x.Theme = "Dark")));
@@ -301,6 +293,54 @@ namespace Lumos
         {
             e.TextColor = e.Item.Enabled ? Text : Muted;
             base.OnRenderItemText(e);
+        }
+
+        // Фон і підсвітку малюємо самі: інакше Windows підставляє світло-блакитну, і білого тексту не видно.
+        protected override void OnRenderToolStripBackground(WF.ToolStripRenderEventArgs e)
+        {
+            using var brush = new SolidBrush(Back);
+            e.Graphics.FillRectangle(brush, e.AffectedBounds);
+        }
+
+        protected override void OnRenderImageMargin(WF.ToolStripRenderEventArgs e)
+        {
+            using var brush = new SolidBrush(Back);
+            e.Graphics.FillRectangle(brush, e.AffectedBounds);
+        }
+
+        protected override void OnRenderToolStripBorder(WF.ToolStripRenderEventArgs e)
+        {
+            using var pen = new Pen(Border);
+            Rectangle r = e.AffectedBounds;
+            e.Graphics.DrawRectangle(pen, r.X, r.Y, r.Width - 1, r.Height - 1);
+        }
+
+        protected override void OnRenderMenuItemBackground(WF.ToolStripItemRenderEventArgs e)
+        {
+            var bounds = new Rectangle(Point.Empty, e.Item.Size);
+            using (var back = new SolidBrush(Back))
+                e.Graphics.FillRectangle(back, bounds);
+
+            bool highlighted = e.Item.Enabled && (e.Item.Selected || (e.Item is WF.ToolStripMenuItem mi && mi.DropDown.Visible));
+            if (!highlighted) return;
+
+            var r = new Rectangle(4, 1, bounds.Width - 8, bounds.Height - 2);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using var path = RoundedRect(r, 4);
+            using var hover = new SolidBrush(Hover);
+            e.Graphics.FillPath(hover, path);
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            int d = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         protected override void OnRenderArrow(WF.ToolStripArrowRenderEventArgs e)

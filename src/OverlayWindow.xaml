@@ -7,7 +7,7 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
-        ShowActivated="False"
+        ShowActivated="True"
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight"
         FontFamily="Segoe UI Variable Text, Segoe UI"
@@ -123,10 +123,10 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Style="{StaticResource HoverFlat}" Command="{Binding CollapseCommand}" ToolTip="Згорнути"
+                    <Button Style="{StaticResource HoverFlat}" Command="{Binding CollapseCommand}" ToolTip="Закрити"
                             Width="30" Height="30" Margin="0,12,12,0" HorizontalAlignment="Right" VerticalAlignment="Top"
                             HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                        <Path Data="M3,9 L7,5 L11,9" Stroke="{DynamicResource Fg3}" StrokeThickness="1.6"
+                        <Path Data="M3.5,3.5 L10.5,10.5 M10.5,3.5 L3.5,10.5" Stroke="{DynamicResource Fg3}" StrokeThickness="1.6"
                               StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="14" Height="14"/>
                     </Button>
                 </Grid>
