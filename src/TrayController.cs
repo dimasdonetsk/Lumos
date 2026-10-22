@@ -90,6 +90,10 @@ namespace Lumos
 
             Add(_menu.Items, Item("Оновити зараз", () => _app.RefreshNow()));
             Add(_menu.Items, Item("Показати графік", () => _app.ShowSchedule(_menuAnchor)));
+            Add(_menu.Items, Item(_app.IsManualOff ? "Світло повернулося" : "У мене немає світла", () => _app.ToggleManualOff()));
+            EmergencyInfo? em = _app.TelegramEmergency;
+            if (em != null && em.Url.Length > 0)
+                Add(_menu.Items, Item("Аварійні: відкрити повідомлення " + em.Source, () => _app.OpenUrl(em.Url)));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
             // Область
@@ -154,6 +158,10 @@ namespace Lumos
 
             var sources = Sub("Джерела даних");
             sources.DropDownItems.Add(Item("UA Power Outages Monitor (GitHub)", () => Open(DataService.SourcePage)));
+            sources.DropDownItems.Add(Item("Укренерго (Telegram)", () => Open("https://t.me/s/Ukrenergo")));
+            string? channel = EmergencyMonitor.ChannelFor(s.RegionId);
+            if (channel != null)
+                sources.DropDownItems.Add(Item("Обленерго (Telegram, @" + channel + ")", () => Open("https://t.me/s/" + channel)));
             sources.DropDownItems.Add(Item("Відкрити папку налаштувань", () => Open(Settings.DataDir)));
             Add(_menu.Items, sources);
             _menu.Items.Add(new WF.ToolStripSeparator());
@@ -245,8 +253,9 @@ namespace Lumos
                         break;
 
                     case StatusKind.Off:
+                    case StatusKind.ManualOff:
                     case StatusKind.NoData:
-                        Color c = kind == StatusKind.Off ? yellow : grey;
+                        Color c = kind == StatusKind.Off ? yellow : kind == StatusKind.ManualOff ? red : grey;
                         using (var p = new Pen(c, 2.4f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
                         {
                             g.DrawPolygon(p, Bolt);

@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Lumos
 {
-    public enum StatusKind { On, Off, Emergency, NoData }
+    public enum StatusKind { On, Off, Emergency, ManualOff, NoData }
 
     public sealed class Interval
     {

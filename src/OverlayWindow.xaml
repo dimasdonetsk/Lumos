@@ -137,9 +137,23 @@
                     <StackPanel>
                         <Border Margin="0,14,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
                                 Visibility="{Binding IsEmergency, Converter={StaticResource Vis}}">
-                            <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AlertFg}"
-                                       Text="Діють аварійні відключення. Графік нижче зараз не діє: світло можуть вимкнути будь-коли."/>
+                            <StackPanel>
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AlertFg}"
+                                           Text="{Binding EmergencyBanner}"/>
+                                <Button Style="{StaticResource Flat}" Command="{Binding OpenPostCommand}" Margin="0,6,0,0"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{Binding HasEmergencyPost, Converter={StaticResource Vis}}">
+                                    <TextBlock Text="Відкрити повідомлення →" FontSize="12.5" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AlertFg}"/>
+                                </Button>
+                            </StackPanel>
                         </Border>
+
+                        <Button Style="{StaticResource HoverFlat}" Command="{Binding ToggleManualCommand}" Margin="0,12,0,0"
+                                Padding="12,9" HorizontalContentAlignment="Left" Background="{DynamicResource Soft}"
+                                ToolTip="Якщо світла немає, а графік каже, що є (або навпаки)">
+                            <TextBlock Text="{Binding ManualButtonText}" FontSize="13" Foreground="{DynamicResource Fg}"/>
+                        </Button>
 
                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                             <Button Style="{StaticResource Flat}" Command="{Binding TodayCommand}" Background="{Binding TodayTabBg}"

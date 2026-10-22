@@ -19,6 +19,8 @@ namespace Lumos
         public bool HideWhenOn { get; set; }
         /// <summary>Dark (сливова) або Light (морозна).</summary>
         public string Theme { get; set; } = "Dark";
+        /// <summary>Коли людина позначила «у мене немає світла» (null — не позначено).</summary>
+        public DateTime? ManualOffSince { get; set; }
 
         public static string DataDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Lumos");

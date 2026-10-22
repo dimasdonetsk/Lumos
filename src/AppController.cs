@@ -27,6 +27,15 @@ namespace Lumos
         private System.Drawing.Point? _lastAnchor;
         private bool _fetching;
 
+        // Аварійні відключення з Telegram (Укренерго і обленерго).
+        private readonly DispatcherTimer _emergencyTimer = new() { Interval = TimeSpan.FromMinutes(5) };
+        private EmergencyInfo? _tgEmergency;
+        private string? _tgRegion;
+        private bool _checkingEmergency;
+
+        public EmergencyInfo? TelegramEmergency => _tgEmergency;
+        public bool IsManualOff => Settings.ManualOffSince != null;
+
         public void Start()
         {
             Settings = Settings.Load();
@@ -34,13 +43,17 @@ namespace Lumos
             AutostartHelper.Apply(Settings.Autostart);
 
             _vm.QueuePicked += SetQueue;
+            _vm.ManualToggled += ToggleManualOff;
+            _vm.OpenUrl += OpenUrl;
             _window = new OverlayWindow(_vm);
             _tray = new TrayController(this);
 
             _tick.Tick += (_, _) => Update();
             _fetch.Tick += async (_, _) => await FetchAsync();
+            _emergencyTimer.Tick += async (_, _) => await CheckEmergencyAsync();
             _tick.Start();
             _fetch.Start();
+            _emergencyTimer.Start();
 
             Update();
             _ = FetchAsync();
@@ -69,9 +82,33 @@ namespace Lumos
                 _fetching = false;
             }
             Update();
+            await CheckEmergencyAsync();
         }
 
         public void RefreshNow() => _ = FetchAsync();
+
+        private async Task CheckEmergencyAsync()
+        {
+            string? regionId = Settings.RegionId;
+            if (_checkingEmergency || regionId == null) return;
+            _checkingEmergency = true;
+            try
+            {
+                EmergencyInfo? info = await EmergencyMonitor.CheckAsync(regionId);
+                if (Settings.RegionId != regionId) return; // область змінили, поки перевіряли
+                _tgEmergency = info;
+                _tgRegion = regionId;
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Emergency check: " + ex.Message);
+            }
+            finally
+            {
+                _checkingEmergency = false;
+            }
+            Update();
+        }
 
         private void Update()
         {
@@ -93,12 +130,22 @@ namespace Lumos
             }
 
             bool needsSetup = region == null || queue == null;
-            bool emergency = region?.Emergency ?? false;
+            EmergencyInfo? tg = _tgRegion == Settings.RegionId ? _tgEmergency : null;
+            bool emergency = (region?.Emergency ?? false) || tg != null;
             Status status = needsSetup ? new Status() : StatusEngine.Compute(today, tomorrow, emergency, nowMinutes);
+
+            // Ручна позначка «немає світла» сильніша за графік; сама знімається через 12 годин.
+            if (Settings.ManualOffSince is DateTime since && now - since > TimeSpan.FromHours(12))
+            {
+                Settings.ManualOffSince = null;
+                Settings.Save();
+            }
+            if (Settings.ManualOffSince != null)
+                status.Kind = StatusKind.ManualOff;
 
             IReadOnlyList<string> queues = region?.SortedQueues().ToList() ?? new List<string>();
             _vm.Apply(status, today, tomorrow, now, region?.Name ?? "", queue ?? "", queues, needsSetup,
-                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false);
+                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince);
             _tray?.Update(status.Kind, _vm.TrayText);
 
             if (!needsSetup)
@@ -123,7 +170,13 @@ namespace Lumos
             }
 
             if (emergency && !_lastEmergency && Settings.Notify)
-                Send("Аварійні відключення", region.Name + ": графік зараз не діє, світло можуть вимкнути будь-коли.");
+            {
+                EmergencyInfo? info = _tgRegion == region.Id ? _tgEmergency : null;
+                string text = info != null
+                    ? info.Source + ": " + (info.Text.Length > 180 ? info.Text.Substring(0, 180) + "…" : info.Text)
+                    : region.Name + ": графік зараз не діє, світло можуть вимкнути будь-коли.";
+                Send("Аварійні відключення", text);
+            }
             _lastEmergency = emergency;
 
             if (Settings.NotifyNewSchedule && tomorrow != null && _notified.Add("tomorrow:" + scope + tomorrowKey))
@@ -203,7 +256,23 @@ namespace Lumos
             if (region == null || Settings.Queue == null || !region.Queues.ContainsKey(Settings.Queue))
                 Settings.Queue = null;
             Settings.Save();
+            _tgEmergency = null;
+            _tgRegion = null;
             ShowSchedule();
+            _ = CheckEmergencyAsync();
+        }
+
+        public void ToggleManualOff()
+        {
+            Settings.ManualOffSince = Settings.ManualOffSince == null ? StatusEngine.KyivNow() : null;
+            Settings.Save();
+            Update();
+        }
+
+        public void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { Log.Write("Open: " + ex.Message); }
         }
 
         public void SetQueue(string queue)
@@ -234,6 +303,7 @@ namespace Lumos
         {
             _tick.Stop();
             _fetch.Stop();
+            _emergencyTimer.Stop();
             _tray?.Dispose();
             _window?.Close();
         }

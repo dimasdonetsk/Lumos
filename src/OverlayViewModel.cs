@@ -58,6 +58,8 @@ namespace Lumos
         private IReadOnlyList<string> _queues = Array.Empty<string>();
         private bool _needsSetup, _fromCache;
         private DateTime _fetchedAt;
+        private EmergencyInfo? _emergencyInfo;
+        private DateTime? _manualSince;
 
         // Стан вигляду
         private bool _isPill;
@@ -66,6 +68,10 @@ namespace Lumos
 
         /// <summary>Кнопка «закрити» на карточці.</summary>
         public event Action? CloseRequested;
+        /// <summary>Кнопка «У мене немає світла» / «Світло повернулося».</summary>
+        public event Action? ManualToggled;
+        /// <summary>Відкрити пост про аварійні відключення.</summary>
+        public event Action<string>? OpenUrl;
 
         public OverlayViewModel()
         {
@@ -74,7 +80,16 @@ namespace Lumos
             ToggleScheduleCommand = new RelayCommand(() => { _scheduleOpen = !_scheduleOpen; Render(); LayoutChanged?.Invoke(); });
             TodayCommand = new RelayCommand(() => { _showTomorrow = false; Render(); LayoutChanged?.Invoke(); });
             TomorrowCommand = new RelayCommand(() => { _showTomorrow = true; Render(); LayoutChanged?.Invoke(); });
+            ToggleManualCommand = new RelayCommand(() => ManualToggled?.Invoke());
+            OpenPostCommand = new RelayCommand(() => { if (_emergencyInfo?.Url.Length > 0) OpenUrl?.Invoke(_emergencyInfo.Url); });
         }
+
+        public ICommand ToggleManualCommand { get; }
+        public ICommand OpenPostCommand { get; }
+        public bool IsManual => _manualSince != null;
+        public string ManualButtonText => IsManual ? "Світло повернулося" : "У мене немає світла";
+        public string EmergencyBanner { get; private set; } = "";
+        public bool HasEmergencyPost => _emergencyInfo != null && _emergencyInfo.Url.Length > 0;
 
         public ICommand ExpandCommand { get; }
         public ICommand CollapseCommand { get; }
@@ -128,8 +143,10 @@ namespace Lumos
         public bool HasQueues => Queues.Count > 0;
 
         public void Apply(Status status, int[]? today, int[]? tomorrow, DateTime kyivNow, string regionName,
-                          string queue, IReadOnlyList<string> queues, bool needsSetup, DateTime fetchedAt, bool fromCache)
+                          string queue, IReadOnlyList<string> queues, bool needsSetup, DateTime fetchedAt, bool fromCache,
+                          EmergencyInfo? emergencyInfo, DateTime? manualSince)
         {
+            _emergencyInfo = emergencyInfo; _manualSince = manualSince;
             _status = status; _today = today; _tomorrow = tomorrow; _kyivNow = kyivNow;
             _regionName = regionName; _queue = queue; _queues = queues;
             _needsSetup = needsSetup; _fetchedAt = fetchedAt; _fromCache = fromCache;
@@ -153,10 +170,24 @@ namespace Lumos
 
             switch (_status.Kind)
             {
+                case StatusKind.ManualOff:
+                {
+                    int since = Math.Max(0, (int)(_kyivNow - _manualSince!.Value).TotalMinutes);
+                    StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconOff = true;
+                    Title = "Світла немає";
+                    Detail = "Не за графіком · позначено о " + _manualSince.Value.ToString("HH:mm");
+                    BigText = StatusEngine.Clock(since); BigLabel = "без світла";
+                    PillText = "без світла";
+                    TrayText = "Світла немає (не за графіком)";
+                    break;
+                }
+
                 case StatusKind.Emergency:
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconAlert = true;
                     Title = "Аварійне відключення";
-                    Detail = "Графік не діє, стежимо за оновленнями";
+                    Detail = _emergencyInfo != null
+                        ? _emergencyInfo.Source + " · " + _emergencyInfo.Time.ToString("HH:mm")
+                        : "Графік не діє, стежимо за оновленнями";
                     BigText = "Будь-коли"; BigLabel = "можуть вимкнути світло";
                     PillText = "Аварійне";
                     TrayText = "Аварійні відключення: графік не діє";
@@ -220,6 +251,10 @@ namespace Lumos
                 ? (_regionName.Length > 0 ? _regionName + " · " : "Lumos · ") + updated
                 : _regionName + " · черга " + _queue + " · " + updated + (_fromCache ? " · офлайн" : "");
 
+            EmergencyBanner = _emergencyInfo != null
+                ? _emergencyInfo.Source + ", " + _emergencyInfo.Time.ToString("HH:mm") + ": " + Shorten(_emergencyInfo.Text, 240)
+                : "Діють аварійні відключення. Графік нижче зараз не діє: світло можуть вимкнути будь-коли.";
+
             RenderDay(now);
             RenderQueues();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
@@ -281,6 +316,9 @@ namespace Lumos
             NowLabelMargin = new Thickness(Math.Clamp(x - 16, 0, CellsWidth - 32), 0, 0, 2);
             NowLabel = _kyivNow.ToString("HH:mm");
         }
+
+        private static string Shorten(string text, int max) =>
+            text.Length <= max ? text : text.Substring(0, max).TrimEnd() + "…";
 
         private void RenderQueues()
         {

@@ -45,7 +45,7 @@ namespace Lumos
         private static HttpClient CreateClient()
         {
             var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Lumos/0.1 (Windows; power outage tray)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Lumos/0.3 (Windows; power outage tray)");
             return client;
         }
 
