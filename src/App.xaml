@@ -1,0 +1,18 @@
+<Application x:Class="Lumos.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <!-- Кольори теми. Значення підміняє Theme.Apply() під час запуску і при перемиканні теми. -->
+        <SolidColorBrush x:Key="Card" Color="#241C2E"/>
+        <SolidColorBrush x:Key="Line" Color="#3A2F48"/>
+        <SolidColorBrush x:Key="Line2" Color="#30273D"/>
+        <SolidColorBrush x:Key="Fg" Color="#F1ECF7"/>
+        <SolidColorBrush x:Key="Fg2" Color="#B3A7C4"/>
+        <SolidColorBrush x:Key="Fg3" Color="#9E92AF"/>
+        <SolidColorBrush x:Key="TabOn" Color="#33293F"/>
+        <SolidColorBrush x:Key="Soft" Color="#2C2337"/>
+        <SolidColorBrush x:Key="AlertBg" Color="#3E1B1C"/>
+        <SolidColorBrush x:Key="AlertFg" Color="#FFB8B1"/>
+    </Application.Resources>
+</Application>

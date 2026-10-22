@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>Lumos</AssemblyName>
+    <RootNamespace>Lumos</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>Lumos</Product>
+    <Description>Графік відключень світла в треї Windows</Description>
+    <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>
