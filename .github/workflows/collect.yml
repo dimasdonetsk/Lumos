@@ -1,0 +1,56 @@
+name: Collect
+
+# Спільний збирач: кожні 5 хвилин обходить сайти обленерго, Укрзалізниці й Telegram-канали
+# і кладе результат у data.json гілки «data». Встановлені копії Lumos читають цей файл,
+# а якщо він застарів чи недоступний — беруть дані напряму, як раніше.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build src/Lumos.csproj -c Release -o bin
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          $out = Join-Path $pwd 'data.json'
+          $p = Start-Process -FilePath 'bin\Lumos.exe' -ArgumentList '--collect', "`"$out`"" -Wait -PassThru
+          Get-Content (Join-Path $pwd 'data.log') -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { Write-Error "collector failed ($($p.ExitCode))"; exit 1 }
+          "size: $((Get-Item $out).Length) bytes"
+
+      - name: Publish to data branch
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force publish-data | Out-Null
+          Copy-Item data.json, data.log publish-data/
+          Set-Location publish-data
+          git init -q -b data
+          git config user.name "lumos-collector"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.json data.log
+          git commit -q -m "data $(Get-Date -Format o)"
+          # Одна коміт-версія без історії, щоб репозиторій не розростався.
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data

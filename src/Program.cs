@@ -21,6 +21,13 @@ namespace Lumos
                 .OnRestarted(v => UpdatedTo = v?.ToString())
                 .Run();
 
+            // Режим спільного збирача (запускається на GitHub за розкладом): без вікон і трею.
+            if (args.Length == 2 && args[0] == "--collect")
+            {
+                Environment.Exit(CentralData.CollectAsync(args[1]).GetAwaiter().GetResult());
+                return;
+            }
+
             var app = new App();
             app.InitializeComponent();
             app.Run();

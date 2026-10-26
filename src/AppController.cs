@@ -101,6 +101,7 @@ namespace Lumos
             _fetching = true;
             try
             {
+                await CentralData.RefreshAsync();
                 Snapshot? snap = await DataService.FetchAsync(Snapshot);
                 if (snap != null) Snapshot = snap;
                 Snapshot ??= new Snapshot { FromCache = true };
@@ -136,6 +137,12 @@ namespace Lumos
         {
             string? regionId = Settings.RegionId;
             if (!UzSource.IsUz(regionId) || regionId == UzSource.Prefix) return;
+            if (CentralData.TryRegion(regionId, out RegionData central))
+            {
+                _uzRegion = central; // спільний збирач уже має свіжу сторінку
+                _uzFetchedAt = DateTime.Now;
+                return;
+            }
             bool stale = _uzRegion?.Id != regionId || DateTime.Now - _uzFetchedAt > TimeSpan.FromMinutes(9);
             if (!force && !stale) return;
 
@@ -161,7 +168,10 @@ namespace Lumos
             _checkingEmergency = true;
             try
             {
-                EmergencyInfo? info = await EmergencyMonitor.CheckAsync(regionId);
+                // Спершу спільний збирач; якщо він не перевіряв цю область або застарів — напряму.
+                EmergencyInfo? info = CentralData.TryEmergency(regionId, out EmergencyInfo? central)
+                    ? central
+                    : await EmergencyMonitor.CheckAsync(regionId);
                 if (Settings.RegionId != regionId) return; // область змінили, поки перевіряли
                 _tgEmergency = info;
                 _tgRegion = regionId;

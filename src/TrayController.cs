@@ -163,6 +163,10 @@ namespace Lumos
             Add(_menu.Items, missing);
 
             var sources = Sub("Джерела даних");
+            sources.DropDownItems.Add(Info(CentralData.IsFresh
+                ? "Через спільний збирач · " + CentralData.GeneratedLocal.ToString("HH:mm")
+                : "Напряму з джерел (збирач недоступний)"));
+            sources.DropDownItems.Add(new WF.ToolStripSeparator());
             sources.DropDownItems.Add(Item("UA Power Outages Monitor (GitHub)", () => Open(DataService.SourcePage)));
             sources.DropDownItems.Add(Item("Укренерго (Telegram)", () => Open("https://t.me/s/Ukrenergo")));
             if (uz && s.RegionId != null && s.RegionId != UzSource.Prefix)

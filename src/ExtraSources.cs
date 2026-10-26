@@ -60,7 +60,11 @@ namespace Lumos
             // щоб інтерфейс ніколи не бачив його наполовину.
             Source? selected = Sources.FirstOrDefault(s => s.Id == selectedId &&
                                                            !snapshot.Regions.Any(r => !r.Extra && r.Id == s.Id));
-            if (selected != null)
+            if (selected != null && CentralData.TryRegion(selected.Id, out RegionData central))
+            {
+                Fetched[selected.Id] = (central, DateTime.Now); // спільний збирач уже має свіжі дані
+            }
+            else if (selected != null)
             {
                 bool stale = !Fetched.TryGetValue(selected.Id, out var last) || DateTime.Now - last.At > TimeSpan.FromMinutes(9);
                 if (force || stale)
@@ -74,7 +78,8 @@ namespace Lumos
             var existing = new HashSet<string>(regions.Select(r => r.Id));
             foreach (Source source in Sources)
                 if (!existing.Contains(source.Id))
-                    regions.Add(Fetched.TryGetValue(source.Id, out var cached) ? cached.Data : Stub(source));
+                    regions.Add(Fetched.TryGetValue(source.Id, out var cached) ? cached.Data
+                              : CentralData.TryRegion(source.Id, out RegionData c) ? c : Stub(source));
             regions.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCulture));
             snapshot.Regions = regions;
         }
@@ -86,9 +91,33 @@ namespace Lumos
             return region;
         }
 
+        /// <summary>Для збирача: усі області з окремих сайтів (дзеркала на GitHub програма й так читає напряму).</summary>
+        public static async Task<List<(string Id, RegionData? Data, string? Error)>> CollectAsync()
+        {
+            var result = new List<(string, RegionData?, string?)>();
+            foreach (Source source in Sources.Where(s => s.Kind != Kind.DtekJson))
+            {
+                try { result.Add((source.Id, await FetchCoreAsync(source).ConfigureAwait(false), null)); }
+                catch (Exception ex) { result.Add((source.Id, null, ex.Message)); }
+            }
+            return result;
+        }
+
         private static async Task<RegionData?> FetchAsync(Source source)
         {
             try
+            {
+                return await FetchCoreAsync(source).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Extra " + source.Id + ": " + ex.Message);
+                return null;
+            }
+        }
+
+        private static async Task<RegionData> FetchCoreAsync(Source source)
+        {
             {
                 RegionData region = Stub(source);
                 switch (source.Kind)
@@ -107,11 +136,6 @@ namespace Lumos
                         break;
                 }
                 return region;
-            }
-            catch (Exception ex)
-            {
-                Log.Write("Extra " + source.Id + ": " + ex.Message);
-                return null;
             }
         }
 

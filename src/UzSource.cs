@@ -110,6 +110,13 @@ namespace Lumos
             return null;
         }
 
+        /// <summary>Для збирача: завантажити й розібрати без кешу; помилки — винятком.</summary>
+        public static async Task<RegionData> FetchFreshAsync(string regionId)
+        {
+            string page = await Http.GetStringAsync(PageUrl(regionId)).ConfigureAwait(false);
+            return Parse(page, regionId, StatusEngine.KyivNow());
+        }
+
         // ───────────────────────────── розбір ─────────────────────────────
 
         private static readonly string[] Months =

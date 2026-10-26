@@ -139,7 +139,11 @@ namespace Lumos
             regionId != null && !UzSource.IsUz(regionId) && RegionChannels.TryGetValue(regionId, out string[]? ch) ? ch[0] : null;
 
         /// <summary>Найсвіжіше повідомлення про аварійні відключення в області, або null.</summary>
-        public static async Task<EmergencyInfo?> CheckAsync(string regionId)
+        /// <summary>Усі області, для яких відомо, де шукати аварійні.</summary>
+        public static IEnumerable<string> KnownRegionIds() => RegionStems.Keys.Concat(RegionChannels.Keys).Distinct();
+
+        /// <param name="strict">Для збирача: якщо якийсь канал не відкрився — виняток, щоб не записати «аварійних немає» навмання.</param>
+        public static async Task<EmergencyInfo?> CheckAsync(string regionId, bool strict = false)
         {
             var checks = new List<Task<EmergencyInfo?>>();
             // Споживачі Укрзалізниці: канал обленерго їх не стосується, лише команди Укренерго по області.
@@ -147,26 +151,39 @@ namespace Lumos
                 regionId = UzSource.ToOblenergo(regionId) ?? regionId;
             else if (RegionChannels.TryGetValue(regionId, out string[]? channels))
                 foreach (string ch in channels)
-                    checks.Add(CheckChannelAsync(ch, ch, null));
+                    checks.Add(CheckChannelAsync(ch, ch, null, strict));
             if (RegionStems.TryGetValue(regionId, out string[]? stems))
             {
-                checks.Add(CheckChannelAsync(Ukrenergo, "Укренерго", stems));
+                checks.Add(CheckChannelAsync(Ukrenergo, "Укренерго", stems, strict));
                 if (DtekRegions.Contains(regionId))
-                    checks.Add(CheckChannelAsync(Dtek, "ДТЕК", stems));
+                    checks.Add(CheckChannelAsync(Dtek, "ДТЕК", stems, strict));
             }
 
             EmergencyInfo?[] results = await Task.WhenAll(checks).ConfigureAwait(false);
             return results.Where(r => r != null).OrderByDescending(r => r!.Time).FirstOrDefault();
         }
 
-        private static async Task<EmergencyInfo?> CheckChannelAsync(string channel, string sourceName, string[]? mustMention)
+        // Одна сторінка каналу на 2 хвилини: збирач перевіряє Укренерго для кожної області, качати його щоразу немає сенсу.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, Task<string> Html)> Pages = new();
+
+        private static Task<string> PageAsync(string channel)
+        {
+            if (Pages.TryGetValue(channel, out var cached) && DateTime.UtcNow - cached.At < TimeSpan.FromMinutes(2) &&
+                !cached.Html.IsFaulted)
+                return cached.Html;
+            Task<string> task = Http.GetStringAsync("https://t.me/s/" + channel);
+            Pages[channel] = (DateTime.UtcNow, task);
+            return task;
+        }
+
+        private static async Task<EmergencyInfo?> CheckChannelAsync(string channel, string sourceName, string[]? mustMention, bool strict)
         {
             try
             {
-                string html = await Http.GetStringAsync("https://t.me/s/" + channel).ConfigureAwait(false);
+                string html = await PageAsync(channel).ConfigureAwait(false);
                 return Evaluate(ParsePosts(html), sourceName, mustMention, DateTime.Now);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!strict)
             {
                 Log.Write("Telegram " + channel + ": " + ex.Message);
                 return null;
