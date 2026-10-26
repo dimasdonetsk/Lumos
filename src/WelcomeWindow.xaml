@@ -10,7 +10,7 @@
         Width="460"
         WindowStartupLocation="CenterScreen"
         Topmost="True"
-        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontFamily="Segoe UI"
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="Grayscale"
         TextOptions.TextHintingMode="Fixed"

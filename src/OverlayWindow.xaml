@@ -10,7 +10,7 @@
         ShowActivated="True"
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight"
-        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontFamily="Segoe UI"
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="Grayscale"
         TextOptions.TextHintingMode="Fixed"
@@ -169,11 +169,13 @@
                         <Button Style="{StaticResource Pill}" Command="{Binding ToggleQueuesCommand}" DockPanel.Dock="Right"
                                 VerticalAlignment="Center" Margin="10,0,0,0" ToolTip="Змінити чергу"
                                 Visibility="{Binding HasQueues, Converter={StaticResource Vis}}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding QueueChipText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"/>
-                                <Path Data="M2,3.5 L5,6.5 L8,3.5" Stroke="{DynamicResource Fg2}" StrokeThickness="1.5" Width="10" Height="10"
-                                      Margin="6,1,0,0" StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <Path DockPanel.Dock="Right" Data="M0,0 L4,4 L8,0" Stretch="None" Stroke="{DynamicResource Fg2}"
+                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Margin="8,2,1,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding QueueChipText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
                         </Button>
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusBrush}"
