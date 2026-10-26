@@ -11,7 +11,10 @@
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight"
         FontFamily="Segoe UI Variable Text, Segoe UI"
-        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Grayscale"
+        TextOptions.TextHintingMode="Fixed"
+        SnapsToDevicePixels="True"
         UseLayoutRounding="True">
 
     <Window.Resources>
@@ -68,6 +71,46 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Тонка повзунка в кольорах програми: без стрілок, заокруглена, яскравішає при наведенні -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="5"/>
+            <Setter Property="MinWidth" Value="5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent" Width="{TemplateBinding Width}">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border x:Name="T" CornerRadius="2.5" Background="{DynamicResource Fg3}" Opacity="0.4"/>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="T" Property="Opacity" Value="0.7"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="T" Property="Opacity" Value="0.9"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Тінь малюємо на окремому шарі позаду, щоб текст лишався чітким -->
         <DropShadowEffect x:Key="Shadow" x:Shared="False" BlurRadius="22" ShadowDepth="4" Direction="270" Opacity="0.35" Color="#000000"/>
     </Window.Resources>
@@ -75,30 +118,13 @@
     <!-- Зовнішній відступ дає місце тіні -->
     <Grid Margin="16,12,16,20">
 
-        <!-- ЗГОРНУТО: пігулка з іконкою і часом наступної зміни -->
-        <Button Style="{StaticResource Flat}" Command="{Binding ExpandCommand}" ToolTip="Показати статус"
-                Visibility="{Binding IsPill, Converter={StaticResource Vis}}" HorizontalAlignment="Center">
-            <Grid>
-            <Border Background="{DynamicResource Card}" CornerRadius="18" Effect="{StaticResource Shadow}"/>
-            <Border Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
-                    CornerRadius="18" Height="36" Padding="10,0,14,0">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <ContentControl Width="18" Height="18" Content="{Binding}" ContentTemplate="{StaticResource StatusIcon}"/>
-                    <TextBlock Text="{Binding PillText}" Margin="8,0,0,1" FontSize="13.5" FontWeight="SemiBold"
-                               Foreground="{DynamicResource Fg}" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-            </Grid>
-        </Button>
-
-        <!-- РОЗГОРНУТО: карточка -->
-        <Grid Width="400" Visibility="{Binding IsCard, Converter={StaticResource Vis}}">
+        <!-- Карточка: статус і графік відразу -->
+        <Grid Width="400">
         <Border Background="{DynamicResource Card}" CornerRadius="16" Effect="{StaticResource Shadow}"/>
         <Border Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="16">
             <StackPanel>
                 <Grid>
-                    <Button Style="{StaticResource Flat}" Command="{Binding ToggleScheduleCommand}" Padding="18,16,18,14"
-                            HorizontalContentAlignment="Stretch" ToolTip="Показати / сховати графік">
+                    <Border Padding="18,16,18,14">
                         <StackPanel>
                             <DockPanel Margin="0,0,34,0">
                                 <Border Width="46" Height="46" CornerRadius="12" Background="{Binding TileBrush}" DockPanel.Dock="Left">
@@ -121,7 +147,7 @@
                             <TextBlock Text="{Binding Footer}" FontSize="11.5" Margin="0,14,0,0" Foreground="{DynamicResource Fg3}"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
-                    </Button>
+                    </Border>
 
                     <Button Style="{StaticResource HoverFlat}" Command="{Binding CollapseCommand}" ToolTip="Закрити"
                             Width="30" Height="30" Margin="0,12,12,0" HorizontalAlignment="Right" VerticalAlignment="Top"
@@ -132,8 +158,7 @@
                 </Grid>
 
                 <!-- ГРАФІК -->
-                <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,4,18,18"
-                        Visibility="{Binding IsScheduleOpen, Converter={StaticResource Vis}}">
+                <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,4,18,18">
                     <StackPanel>
                         <Border Margin="0,14,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
                                 Visibility="{Binding IsEmergency, Converter={StaticResource Vis}}">
@@ -291,7 +316,7 @@
                         <StackPanel Visibility="{Binding HasQueues, Converter={StaticResource Vis}}">
                             <TextBlock Text="ЧЕРГА" Margin="0,18,0,0" FontSize="11.5" Foreground="{DynamicResource Fg3}"/>
                             <ScrollViewer MaxHeight="150" Margin="-2.5,6,-2.5,0" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding Queues}">
+                                <ItemsControl ItemsSource="{Binding Queues}" Margin="0,0,4,0">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <UniformGrid Columns="6"/>

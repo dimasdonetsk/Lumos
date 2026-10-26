@@ -11,7 +11,10 @@
         WindowStartupLocation="CenterScreen"
         Topmost="True"
         FontFamily="Segoe UI Variable Text, Segoe UI"
-        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Grayscale"
+        TextOptions.TextHintingMode="Fixed"
+        SnapsToDevicePixels="True"
         UseLayoutRounding="True">
 
     <Window.Resources>

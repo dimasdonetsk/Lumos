@@ -79,8 +79,6 @@ namespace Lumos
         private DateTime? _manualSince;
 
         // Стан вигляду
-        private bool _isPill;
-        private bool _scheduleOpen = true;
         private bool _showTomorrow;
 
         /// <summary>Кнопка «закрити» на карточці.</summary>
@@ -92,9 +90,7 @@ namespace Lumos
 
         public OverlayViewModel()
         {
-            ExpandCommand = new RelayCommand(() => { _isPill = false; Render(); LayoutChanged?.Invoke(); });
             CollapseCommand = new RelayCommand(() => CloseRequested?.Invoke());
-            ToggleScheduleCommand = new RelayCommand(() => { _scheduleOpen = !_scheduleOpen; Render(); LayoutChanged?.Invoke(); });
             TodayCommand = new RelayCommand(() => { _showTomorrow = false; Render(); LayoutChanged?.Invoke(); });
             TomorrowCommand = new RelayCommand(() => { _showTomorrow = true; Render(); LayoutChanged?.Invoke(); });
             ToggleManualCommand = new RelayCommand(() => ManualToggled?.Invoke());
@@ -111,16 +107,12 @@ namespace Lumos
         public string EmergencyBanner { get; private set; } = "";
         public bool HasEmergencyPost => _emergencyInfo != null && _emergencyInfo.Url.Length > 0;
 
-        public ICommand ExpandCommand { get; }
         public ICommand CollapseCommand { get; }
-        public ICommand ToggleScheduleCommand { get; }
         public ICommand TodayCommand { get; }
         public ICommand TomorrowCommand { get; }
 
         // Що показувати
-        public bool IsPill => _isPill;
-        public bool IsCard => !_isPill;
-        public bool IsScheduleOpen => _scheduleOpen && !_isPill;
+
 
         // Статус
         public Brush StatusBrush { get; private set; } = Brushes.Gray;
@@ -133,7 +125,6 @@ namespace Lumos
         public string BigText { get; private set; } = "";
         public string BigLabel { get; private set; } = "";
         public bool HasBig => BigText.Length > 0;
-        public string PillText { get; private set; } = "";
         public string Footer { get; private set; } = "";
         public string TrayText { get; private set; } = "Lumos";
         public bool IsEmergency { get; private set; }
@@ -177,8 +168,6 @@ namespace Lumos
 
         public void OpenSchedule()
         {
-            _isPill = false;
-            _scheduleOpen = true;
             Render();
             LayoutChanged?.Invoke();
         }
@@ -199,7 +188,6 @@ namespace Lumos
                     Title = "Світла немає";
                     Detail = "Не за графіком · позначено о " + _manualSince.Value.ToString("HH:mm");
                     BigText = StatusEngine.Clock(since); BigLabel = "без світла";
-                    PillText = "без світла";
                     TrayText = "Світла немає (не за графіком)";
                     break;
                 }
@@ -211,7 +199,6 @@ namespace Lumos
                         ? _emergencyInfo.Source + " · " + _emergencyInfo.Time.ToString("HH:mm")
                         : "Графік не діє, стежимо за оновленнями";
                     BigText = "Будь-коли"; BigLabel = "можуть вимкнути світло";
-                    PillText = "Аварійне";
                     TrayText = "Аварійні відключення: графік не діє";
                     break;
 
@@ -223,13 +210,11 @@ namespace Lumos
                     {
                         BigText = StatusEngine.Clock(onAt - now);
                         BigLabel = "до увімкнення о " + StatusEngine.Hm(onAt);
-                        PillText = "до " + StatusEngine.Hm(onAt);
                         TrayText = "Світла немає · увімкнуть о " + StatusEngine.Hm(onAt);
                     }
                     else
                     {
                         BigText = ""; BigLabel = "";
-                        PillText = "без світла";
                         TrayText = "Світла немає";
                     }
                     break;
@@ -244,13 +229,11 @@ namespace Lumos
                     {
                         BigText = StatusEngine.Clock(offAt - now);
                         BigLabel = "до відключення о " + StatusEngine.Hm(offAt);
-                        PillText = "до " + StatusEngine.Hm(offAt);
                         TrayText = "Світло є · вимкнуть о " + StatusEngine.Hm(offAt);
                     }
                     else
                     {
                         BigText = ""; BigLabel = "";
-                        PillText = "світло є";
                         TrayText = "Світло є";
                     }
                     break;
@@ -263,7 +246,6 @@ namespace Lumos
                            : _regionName.Length == 0 ? "Правий клік по іконці в треї → Область"
                            : "Кнопки внизу або правий клік → Черга";
                     BigText = ""; BigLabel = "";
-                    PillText = _needsSetup ? "налаштувати" : "—";
                     TrayText = Title;
                     break;
             }

@@ -72,47 +72,56 @@ namespace Lumos
         private void Place()
         {
             if (!IsVisible) return;
-            PresentationSource? source = PresentationSource.FromVisual(this);
-            Matrix toDip = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-            Point anchor = toDip.Transform(new Point(_anchorPx.X, _anchorPx.Y));
 
-            Rect area = SystemParameters.WorkArea;
-            double screenW = SystemParameters.PrimaryScreenWidth;
-            double w = ActualWidth, h = ActualHeight;
-            const double gap = 8;
+            // Рахуємо у фізичних пікселях монітора, на якому значок, з його власним масштабом.
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            double sx = dpi.DpiScaleX, sy = dpi.DpiScaleY;
+            System.Windows.Forms.Screen screen = System.Windows.Forms.Screen.FromPoint(_anchorPx);
+            System.Drawing.Rectangle area = screen.WorkingArea;
+            System.Drawing.Rectangle bounds = screen.Bounds;
+
+            double w = ActualWidth * sx, h = ActualHeight * sy;
+            double padL = PadLeft * sx, padT = PadTop * sy, padR = PadRight * sx, padB = PadBottom * sy;
+            double gap = 8 * sx;
 
             double left, top;
-            if (area.Top > 0)
+            if (area.Top > bounds.Top)
             {
                 // Панель завдань угорі: відкриваємося під нею.
-                top = area.Top + gap - PadTop;
-                left = anchor.X - w / 2;
+                top = area.Top + gap - padT;
+                left = _anchorPx.X - w / 2;
             }
-            else if (area.Left > 0)
+            else if (area.Left > bounds.Left)
             {
                 // Панель зліва.
-                left = area.Left + gap - PadLeft;
-                top = anchor.Y - h / 2;
+                left = area.Left + gap - padL;
+                top = _anchorPx.Y - h / 2;
             }
-            else if (area.Right < screenW)
+            else if (area.Right < bounds.Right)
             {
                 // Панель справа.
-                left = area.Right - gap - w + PadRight;
-                top = anchor.Y - h / 2;
+                left = area.Right - gap - w + padR;
+                top = _anchorPx.Y - h / 2;
             }
             else
             {
                 // Звичайний випадок: панель знизу, відкриваємося над значком.
-                top = area.Bottom - gap - h + PadBottom;
-                left = anchor.X - w / 2;
+                top = area.Bottom - gap - h + padB;
+                left = _anchorPx.X - w / 2;
             }
 
             // Не виходити за межі робочої області.
-            left = Math.Max(area.Left - PadLeft + gap, Math.Min(left, area.Right - w + PadRight - gap));
-            top = Math.Max(area.Top - PadTop + gap, Math.Min(top, area.Bottom - h + PadBottom - gap));
+            left = Math.Max(area.Left - padL + gap, Math.Min(left, area.Right - w + padR - gap));
+            top = Math.Max(area.Top - padT + gap, Math.Min(top, area.Bottom - h + padB - gap));
 
-            Left = left;
-            Top = top;
+            Left = Math.Round(left) / sx;
+            Top = Math.Round(top) / sy;
+        }
+
+        protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+        {
+            base.OnDpiChanged(oldDpi, newDpi);
+            Dispatcher.BeginInvoke(new Action(Place));
         }
     }
 
