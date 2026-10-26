@@ -213,14 +213,14 @@ namespace Lumos
 
             // Скільки триває поточний стан: від початку за графіком, а якщо людина позначала,
             // що світла не було, — від моменту, коли натиснула «Світло повернулося».
-            DateTime? since = null;
+            DateTime? stateSince = null;
             if (status.Kind == StatusKind.ManualOff)
-                since = Settings.ManualOffSince;
+                stateSince = Settings.ManualOffSince;
             else if ((status.Kind == StatusKind.On || status.Kind == StatusKind.Off) && status.CurrentStart is int startMin)
             {
-                since = now.Date.AddMinutes(startMin);
-                if (status.Kind == StatusKind.On && Settings.LightBackAt is DateTime back && back > since && back <= now)
-                    since = back;
+                stateSince = now.Date.AddMinutes(startMin);
+                if (status.Kind == StatusKind.On && Settings.LightBackAt is DateTime back && back > stateSince && back <= now)
+                    stateSince = back;
             }
             // Позначка «світло повернулося» більше не потрібна, щойно за графіком світло зникло або минула доба.
             if (Settings.LightBackAt is DateTime b2 && (status.Kind == StatusKind.Off || now - b2 > TimeSpan.FromHours(24)))
@@ -233,7 +233,7 @@ namespace Lumos
             // Поки вікно закрите, малювати графік не треба: рахуємо лише статус для іконки й сповіщень.
             _vm.IsActive = _window != null;
             _vm.Apply(status, today, tomorrow, now, region?.Name ?? "", queue ?? "", queues, needsSetup,
-                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince, since);
+                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince, stateSince);
             _tray?.Update(status.Kind, _vm.TrayText);
 
             if (!needsSetup)
