@@ -23,7 +23,7 @@ namespace Lumos
             AccessKeyBox.Text = s.EcoAccessKey ?? "";
             SecretKeyBox.Password = EcoFlow.Unprotect(s.EcoSecretEnc);
             EmailBox.Text = s.EcoEmail ?? "";
-            PasswordBox.Password = EcoFlow.Unprotect(s.EcoPasswordEnc);
+            PasswordInput.Password = EcoFlow.Unprotect(s.EcoPasswordEnc);
             SnBox.Text = s.EcoMode == "Login" ? s.EcoSn ?? "" : "";
             if (app.EcoConnected)
             {
@@ -77,7 +77,7 @@ namespace Lumos
                 }
                 else
                 {
-                    string email = EmailBox.Text.Trim(), pw = PasswordBox.Password, sn = SnBox.Text.Trim().ToUpperInvariant();
+                    string email = EmailBox.Text.Trim(), pw = PasswordInput.Password, sn = SnBox.Text.Trim().ToUpperInvariant();
                     if (email.Length == 0 || pw.Length == 0) { ShowStatus(false, "Введи пошту й пароль EcoFlow."); return; }
                     if (sn.Length < 8) { ShowStatus(false, "Введи серійний номер станції."); return; }
                     EcoFlow.ForgetSession();

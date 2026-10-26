@@ -197,7 +197,7 @@
                     <TextBlock Text="Пошта акаунта EcoFlow" Style="{StaticResource Label}"/>
                     <TextBox x:Name="EmailBox"/>
                     <TextBlock Text="Пароль" Style="{StaticResource Label}"/>
-                    <PasswordBox x:Name="PasswordBox"/>
+                    <PasswordBox x:Name="PasswordInput"/>
                     <TextBlock Text="Серійний номер станції" Style="{StaticResource Label}"/>
                     <TextBox x:Name="SnBox" CharacterCasing="Upper"/>
                     <TextBlock Margin="0,6,0,0" Style="{StaticResource Hint}"
