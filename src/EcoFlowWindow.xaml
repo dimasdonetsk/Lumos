@@ -182,7 +182,7 @@
                     <TextBlock Margin="0,12,0,0" Style="{StaticResource Hint}">
                         <Run Text="Офіційний спосіб. Зареєструйся на"/>
                         <Hyperlink NavigateUri="https://developer-eu.ecoflow.com" RequestNavigate="OnLink" Foreground="#36C66A">developer-eu.ecoflow.com</Hyperlink>
-                        <Run Text="тим самим акаунтом, що й у застосунку, і створи ключі в розділі Developer → Access Key. Схвалення може зайняти кілька днів."/>
+                        <Run Text="тим самим акаунтом, що й у застосунку, , натисни «Become a Developer», дочекайся листа про схвалення і створи ключі в розділі Security."/>
                     </TextBlock>
                     <TextBlock Text="Access Key" Style="{StaticResource Label}"/>
                     <TextBox x:Name="AccessKeyBox"/>
