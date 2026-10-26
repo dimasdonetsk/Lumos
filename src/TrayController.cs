@@ -166,6 +166,10 @@ namespace Lumos
             Add(_menu.Items, sources);
             _menu.Items.Add(new WF.ToolStripSeparator());
 
+            Add(_menu.Items, Item("Перевірити оновлення", () => _app.CheckUpdatesManual()));
+            _menu.Items.Add(Info("Версія " + Updater.CurrentVersion));
+            _menu.Items.Add(new WF.ToolStripSeparator());
+
             Add(_menu.Items, Item("Вийти", () => _app.Exit()));
         }
 

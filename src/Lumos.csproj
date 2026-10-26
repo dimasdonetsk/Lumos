@@ -9,15 +9,23 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Lumos</AssemblyName>
     <RootNamespace>Lumos</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Product>Lumos</Product>
     <Description>Графік відключень світла в треї Windows</Description>
     <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>
+    <ApplicationIcon>lumos.ico</ApplicationIcon>
+    <!-- Власний Main (Program.cs): інсталятору потрібно перехопити запуск першим -->
+    <StartupObject>Lumos.Program</StartupObject>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
 
     <!-- Економія пам'яті й процесора для програми, що весь час сидить у треї -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Збирач сміття частіше стискає пам'ять замість того, щоб її нарощувати -->

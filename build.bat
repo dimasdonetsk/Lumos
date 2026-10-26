@@ -13,9 +13,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-dotnet publish "%~dp0src\Lumos.csproj" -c Release -r win-x64 --self-contained true ^
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
-  -o "%~dp0out"
+dotnet publish "%~dp0src\Lumos.csproj" -c Release -r win-x64 --self-contained true -o "%~dp0out"
 
 if errorlevel 1 (
   echo.

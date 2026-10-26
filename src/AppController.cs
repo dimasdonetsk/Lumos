@@ -36,6 +36,10 @@ namespace Lumos
         private string? _tgRegion;
         private bool _checkingEmergency;
 
+        // Оновлення програми: перша перевірка за 2 хв після запуску, далі раз на 6 годин.
+        private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromMinutes(2) };
+        private bool _updating;
+
         public EmergencyInfo? TelegramEmergency => _tgEmergency;
         public bool IsManualOff => Settings.ManualOffSince != null;
 
@@ -57,8 +61,17 @@ namespace Lumos
                 _trim.Stop();
                 if (_window == null) MemoryHelper.Trim();
             };
+            _updateTimer.Tick += async (_, _) =>
+            {
+                _updateTimer.Interval = TimeSpan.FromHours(6);
+                await CheckUpdatesAsync(false);
+            };
             _tick.Start();
             _fetch.Start();
+            if (Updater.IsInstalled) _updateTimer.Start();
+
+            if (Program.UpdatedTo != null)
+                _tray.Notify("Lumos оновлено", "Встановлено версію " + Program.UpdatedTo + ".");
 
             Update();
             _ = FetchAsync();
@@ -289,6 +302,53 @@ namespace Lumos
             _ = CheckEmergencyAsync();
         }
 
+        // ───────────────────────────── оновлення ─────────────────────────────
+
+        public void CheckUpdatesManual() => _ = CheckUpdatesAsync(true);
+
+        private async Task CheckUpdatesAsync(bool manual)
+        {
+            if (_updating) return;
+            if (!Updater.IsInstalled)
+            {
+                if (manual)
+                    _tray?.Notify("Автооновлення вимкнене",
+                        "Воно працює лише у встановленій версії. Встанови Lumos через Lumos-win-Setup.exe з GitHub.");
+                return;
+            }
+
+            _updating = true;
+            try
+            {
+                var info = await Updater.CheckAsync();
+                if (info == null)
+                {
+                    if (manual) _tray?.Notify("Оновлень немає", "У тебе остання версія " + Updater.CurrentVersion + ".");
+                    return;
+                }
+
+                string version = Updater.VersionOf(info);
+                if (manual) _tray?.Notify("Знайдено версію " + version, "Завантажую. Lumos перезапуститься сам.");
+                await Updater.DownloadAsync(info);
+
+                // Не перезапускатися, поки людина дивиться на графік.
+                while (_window != null) await Task.Delay(TimeSpan.FromSeconds(5));
+
+                _tray?.Dispose();
+                _tray = null;
+                Updater.ApplyAndRestart(info);
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Update: " + ex);
+                if (manual) _tray?.Notify("Не вдалося оновитися", "Спробуй пізніше. " + ex.Message);
+            }
+            finally
+            {
+                _updating = false;
+            }
+        }
+
         public void ToggleManualOff()
         {
             Settings.ManualOffSince = Settings.ManualOffSince == null ? StatusEngine.KyivNow() : null;
@@ -331,6 +391,7 @@ namespace Lumos
             _tick.Stop();
             _fetch.Stop();
             _trim.Stop();
+            _updateTimer.Stop();
             _tray?.Dispose();
             _window?.Close();
         }
