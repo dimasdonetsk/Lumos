@@ -249,7 +249,7 @@ namespace Lumos
                     Title = "Світла немає";
                     if (_status.NextChange is int onAt)
                     {
-                        Detail = "Увімкнуть о " + StatusEngine.Hm(onAt) + " · через " + StatusEngine.Duration(onAt - now);
+                        Detail = Keep("Увімкнуть о " + StatusEngine.Hm(onAt)) + " · " + Keep("через " + StatusEngine.Duration(onAt - now));
                         TrayText = "Світла немає · увімкнуть о " + StatusEngine.Hm(onAt);
                     }
                     else
@@ -265,7 +265,7 @@ namespace Lumos
                     Title = "Світло є";
                     if (_status.NextOutage is Interval o)
                     {
-                        Detail = "Вимкнуть о " + StatusEngine.Hm(o.Start) + " · через " + StatusEngine.Duration(o.Start - now);
+                        Detail = Keep("Вимкнуть о " + StatusEngine.Hm(o.Start)) + " · " + Keep("через " + StatusEngine.Duration(o.Start - now));
                         TrayText = "Світло є · вимкнуть о " + StatusEngine.Hm(o.Start);
                     }
                     else
@@ -491,6 +491,9 @@ namespace Lumos
             if (since.Date < _kyivNow.Date) at = "вчора " + at;
             BigLabel = what + " з " + at;
         }
+
+        /// <summary>Нерозривні пробіли: фраза переноситься лише цілою («через 1 год 30 хв»), а не посередині.</summary>
+        private static string Keep(string phrase) => phrase.Replace(' ', '\u00A0');
 
         private static string Shorten(string text, int max) =>
             text.Length <= max ? text : text.Substring(0, max).TrimEnd() + "…";
