@@ -77,6 +77,7 @@ namespace Lumos
         private DateTime _fetchedAt;
         private EmergencyInfo? _emergencyInfo;
         private DateTime? _manualSince;
+        private bool _queuesOpen;
         private DateTime? _stateSince;
 
         // Стан вигляду
@@ -95,6 +96,7 @@ namespace Lumos
             TodayCommand = new RelayCommand(() => { _showTomorrow = false; Render(); LayoutChanged?.Invoke(); });
             TomorrowCommand = new RelayCommand(() => { _showTomorrow = true; Render(); LayoutChanged?.Invoke(); });
             ToggleManualCommand = new RelayCommand(() => ManualToggled?.Invoke());
+            ToggleQueuesCommand = new RelayCommand(() => { _queuesOpen = !_queuesOpen; Render(); LayoutChanged?.Invoke(); });
             OpenPostCommand = new RelayCommand(() => { if (_emergencyInfo?.Url.Length > 0) OpenUrl?.Invoke(_emergencyInfo.Url); });
         }
 
@@ -102,9 +104,34 @@ namespace Lumos
         public bool IsActive { get; set; }
 
         public ICommand ToggleManualCommand { get; }
+        public ICommand ToggleQueuesCommand { get; }
+        public bool QueuesOpen => _queuesOpen && Queues.Count > 0;
+        public string QueueChipText => _queue.Length > 0 ? "Черга " + _queue : "Обрати чергу";
+
+        // «Вимкнули» / «Увімкнули»: завжди протилежне до того, що зараз показано.
+        public bool HasBigRow => !_needsSetup;
+        private bool ShowsLight => _status.Kind is StatusKind.On or StatusKind.ManualOn or StatusKind.Emergency;
+        public bool ManualIconStrike => ShowsLight;
+        public string ManualTip => _status.Kind switch
+        {
+            StatusKind.ManualOff => "Світло дали — повернутися до графіка",
+            StatusKind.ManualOn => "Світло знову вимкнули — повернутися до графіка",
+            StatusKind.Off => "Світло дали раніше, ніж за графіком — позначити",
+            _ => "Світла немає не за графіком — позначити"
+        };
+
+        // Вкладки
+        public FontWeight TodayTabWeight => _showTomorrow ? FontWeights.Normal : FontWeights.SemiBold;
+        public FontWeight TomorrowTabWeight => _showTomorrow ? FontWeights.SemiBold : FontWeights.Normal;
+
+        // «Далі»: найближчі проміжки сьогодні, або весь графік на завтра
+        public string NextTitle { get; private set; } = "ДАЛІ";
+        public IReadOnlyList<IntervalVm> NextRows { get; private set; } = Array.Empty<IntervalVm>();
+        public string NextEmpty { get; private set; } = "";
+        public bool HasNextEmpty => NextEmpty.Length > 0;
         public ICommand OpenPostCommand { get; }
         public bool IsManual => _manualSince != null;
-        public string ManualButtonText => IsManual ? "Світло повернулося" : "У мене немає світла";
+        public string ManualButtonText => ShowsLight ? "Вимкнули" : "Увімкнули";
         public string EmergencyBanner { get; private set; } = "";
         public bool HasEmergencyPost => _emergencyInfo != null && _emergencyInfo.Url.Length > 0;
 
@@ -190,6 +217,14 @@ namespace Lumos
                     TrayText = "Світла немає (не за графіком)";
                     break;
 
+                case StatusKind.ManualOn:
+                    StatusBrush = Theme.StatusGreen; TileBrush = Theme.TileGreen; IconOn = true;
+                    Title = "Світло є";
+                    Detail = "Не за графіком · позначено о " + (_stateSince ?? _kyivNow).ToString("HH:mm");
+                    SetElapsed("світло є");
+                    TrayText = "Світло є (не за графіком)";
+                    break;
+
                 case StatusKind.Emergency:
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconAlert = true;
                     Title = "Аварійне відключення";
@@ -247,7 +282,7 @@ namespace Lumos
             string updated = _fetchedAt == default ? "ще не оновлено" : "оновлено " + _fetchedAt.ToString("HH:mm");
             Footer = _needsSetup
                 ? (_regionName.Length > 0 ? _regionName + " · " : "Lumos · ") + updated
-                : _regionName + " · черга " + _queue + " · " + updated + (_fromCache ? " · офлайн" : "");
+                : _regionName + " · " + updated + (_fromCache ? " · офлайн" : "");
 
             EmergencyBanner = _emergencyInfo != null
                 ? _emergencyInfo.Source + ", " + _emergencyInfo.Time.ToString("HH:mm") + ": " + Shorten(_emergencyInfo.Text, 240)
@@ -271,6 +306,8 @@ namespace Lumos
             if (slots == null)
             {
                 Segments = Array.Empty<SegmentVm>();
+                NextRows = Array.Empty<IntervalVm>();
+                NextEmpty = "";
                 TimeLabels = Array.Empty<TimeLabelVm>();
                 Intervals = Array.Empty<IntervalVm>();
                 if (_showTomorrow)
@@ -304,6 +341,19 @@ namespace Lumos
                 Chip = iv.Off ? Theme.CellYellow : Theme.CellGreen,
                 Opacity = !_showTomorrow && iv.End <= now ? 0.45 : 1
             }).ToList();
+
+            // Сьогодні — лише два найближчі проміжки (минуле видно на смузі); завтра — увесь день.
+            List<Interval> all = StatusEngine.Intervals(slots);
+            List<Interval> shown = _showTomorrow ? all : all.Where(iv => iv.Start >= now).Take(2).ToList();
+            NextTitle = _showTomorrow ? "ЗАВТРА" : "ДАЛІ";
+            NextRows = shown.Select(iv => new IntervalVm
+            {
+                Range = StatusEngine.Hm(iv.Start) + " – " + StatusEngine.Hm(iv.End),
+                Label = iv.Off ? "без світла" : "світло є",
+                Dur = StatusEngine.Duration(iv.End - iv.Start),
+                Chip = iv.Off ? Theme.CellYellow : Theme.CellGreen
+            }).ToList();
+            NextEmpty = shown.Count == 0 ? "До кінця доби змін за графіком немає" : "";
 
             NowX = Math.Round(now / 1440.0 * CellsWidth) - 1;
             NowLabelX = Math.Clamp(NowX + 1 - NowLabelWidth / 2, 0, CellsWidth - NowLabelWidth);
@@ -445,7 +495,7 @@ namespace Lumos
                 Bg = q == _queue ? fg : soft,
                 Fg = q == _queue ? card : fg2,
                 Weight = q == _queue ? FontWeights.SemiBold : FontWeights.Normal,
-                Pick = new RelayCommand(() => QueuePicked?.Invoke(q))
+                Pick = new RelayCommand(() => { _queuesOpen = false; QueuePicked?.Invoke(q); LayoutChanged?.Invoke(); })
             }).ToList();
         }
     }

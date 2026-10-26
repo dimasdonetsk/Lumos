@@ -51,6 +51,7 @@ namespace Lumos
 
         public EmergencyInfo? TelegramEmergency => _tgEmergency;
         public bool IsManualOff => Settings.ManualOffSince != null;
+        private StatusKind _scheduledKind = StatusKind.NoData;
 
         public void Start()
         {
@@ -202,20 +203,31 @@ namespace Lumos
             bool emergency = (region?.Emergency ?? false) || tg != null;
             Status status = needsSetup ? new Status() : StatusEngine.Compute(today, tomorrow, yesterday, emergency, nowMinutes);
 
-            // Ручна позначка «немає світла» сильніша за графік; сама знімається через 12 годин.
-            if (Settings.ManualOffSince is DateTime since && now - since > TimeSpan.FromHours(12))
+            // Ручні позначки сильніші за графік. Знімаються самі: коли графік «наздогнав» реальність
+            // (позначили «Вимкнули», а тепер і за графіком відключення) або через 12 годин.
+            _scheduledKind = status.Kind;
+            bool changed = false;
+            if (Settings.ManualOffSince is DateTime offAt &&
+                (status.Kind == StatusKind.Off || now - offAt > TimeSpan.FromHours(12)))
             {
-                Settings.ManualOffSince = null;
-                Settings.Save();
+                Settings.ManualOffSince = null; changed = true;
             }
-            if (Settings.ManualOffSince != null)
-                status.Kind = StatusKind.ManualOff;
+            if (Settings.ManualOnSince is DateTime onAt &&
+                (status.Kind == StatusKind.On || now - onAt > TimeSpan.FromHours(12)))
+            {
+                Settings.ManualOnSince = null; changed = true;
+            }
+            if (changed) Settings.Save();
+            if (!needsSetup && Settings.ManualOffSince != null) status.Kind = StatusKind.ManualOff;
+            else if (!needsSetup && Settings.ManualOnSince != null) status.Kind = StatusKind.ManualOn;
 
             // Скільки триває поточний стан: від початку за графіком, а якщо людина позначала,
             // що світла не було, — від моменту, коли натиснула «Світло повернулося».
             DateTime? stateSince = null;
             if (status.Kind == StatusKind.ManualOff)
                 stateSince = Settings.ManualOffSince;
+            else if (status.Kind == StatusKind.ManualOn)
+                stateSince = Settings.ManualOnSince;
             else if ((status.Kind == StatusKind.On || status.Kind == StatusKind.Off) && status.CurrentStart is int startMin)
             {
                 stateSince = now.Date.AddMinutes(startMin);
@@ -444,15 +456,28 @@ namespace Lumos
 
         public void ToggleManualOff()
         {
-            if (Settings.ManualOffSince == null)
+            DateTime now = StatusEngine.KyivNow();
+            if (Settings.ManualOffSince != null)
             {
-                Settings.ManualOffSince = StatusEngine.KyivNow();
-                Settings.LightBackAt = null;
+                // «Увімкнули» після позначки «Вимкнули»: назад до графіка, світло є від цієї хвилини.
+                Settings.ManualOffSince = null;
+                Settings.LightBackAt = now;
+            }
+            else if (Settings.ManualOnSince != null)
+            {
+                // «Вимкнули» після «Увімкнули»: назад до графіка (за ним і так відключення).
+                Settings.ManualOnSince = null;
+            }
+            else if (_scheduledKind == StatusKind.Off)
+            {
+                // За графіком світла немає, а його дали раніше.
+                Settings.ManualOnSince = now;
             }
             else
             {
-                Settings.ManualOffSince = null;
-                Settings.LightBackAt = StatusEngine.KyivNow();
+                // За графіком світло є (або аварійні), а його немає.
+                Settings.ManualOffSince = now;
+                Settings.LightBackAt = null;
             }
             Settings.Save();
             Update();

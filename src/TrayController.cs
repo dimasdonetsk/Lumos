@@ -265,6 +265,7 @@ namespace Lumos
                 switch (kind)
                 {
                     case StatusKind.On:
+                    case StatusKind.ManualOn:
                         using (var b = new SolidBrush(green)) g.FillPolygon(b, Bolt);
                         break;
 

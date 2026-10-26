@@ -111,90 +111,153 @@
             </Setter>
         </Style>
 
+        <!-- Кнопка-пігулка: «Черга 3.1 ⌄», «Вимкнули» -->
+        <Style x:Key="Pill" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="{DynamicResource Soft}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" Height="30" CornerRadius="15" Padding="12,0,11,0"
+                                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource TabOn}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Половинка перемикача «Сьогодні / Завтра» -->
+        <Style x:Key="Segment" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Height="28" CornerRadius="8" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Тінь малюємо на окремому шарі позаду, щоб текст лишався чітким -->
         <DropShadowEffect x:Key="Shadow" x:Shared="False" BlurRadius="22" ShadowDepth="4" Direction="270" Opacity="0.35" Color="#000000"/>
     </Window.Resources>
 
     <!-- Зовнішній відступ дає місце тіні -->
     <Grid Margin="16,12,16,20">
-
-        <!-- Карточка: статус і графік відразу -->
         <Grid Width="400">
         <Border Background="{DynamicResource Card}" CornerRadius="16" Effect="{StaticResource Shadow}"/>
         <Border Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="16">
             <StackPanel>
-                <Grid>
-                    <Border Padding="18,16,18,14">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,34,0">
-                                <Border Width="46" Height="46" CornerRadius="12" Background="{Binding TileBrush}" DockPanel.Dock="Left">
-                                    <ContentControl Width="24" Height="24" Content="{Binding}" ContentTemplate="{StaticResource StatusIcon}"/>
-                                </Border>
-                                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusBrush}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding Detail}" FontSize="13" Margin="0,2,0,0" Foreground="{DynamicResource Fg2}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-                            </DockPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0"
-                                        Visibility="{Binding HasBig, Converter={StaticResource Vis}}">
-                                <TextBlock Text="{Binding BigText}" FontSize="40" FontWeight="Bold" Foreground="{DynamicResource Fg}"
-                                           Typography.NumeralAlignment="Tabular"/>
-                                <TextBlock Text="{Binding BigLabel}" FontSize="13" Foreground="{DynamicResource Fg2}"
-                                           VerticalAlignment="Bottom" Margin="10,0,0,8"/>
+
+                <!-- СТАТУС -->
+                <StackPanel Margin="18,16,16,4">
+                    <DockPanel>
+                        <Border Width="46" Height="46" CornerRadius="12" Background="{Binding TileBrush}" DockPanel.Dock="Left">
+                            <ContentControl Width="24" Height="24" Content="{Binding}" ContentTemplate="{StaticResource StatusIcon}"/>
+                        </Border>
+                        <Button Style="{StaticResource Pill}" Command="{Binding ToggleQueuesCommand}" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Margin="10,0,0,0" ToolTip="Змінити чергу"
+                                Visibility="{Binding HasQueues, Converter={StaticResource Vis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding QueueChipText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"/>
+                                <Path Data="M2,3.5 L5,6.5 L8,3.5" Stroke="{DynamicResource Fg2}" StrokeThickness="1.5" Width="10" Height="10"
+                                      Margin="6,1,0,0" StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="{Binding Footer}" FontSize="11.5" Margin="0,14,0,0" Foreground="{DynamicResource Fg3}"
+                        </Button>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusBrush}"
                                        TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Detail}" FontSize="13" Margin="0,2,0,0" Foreground="{DynamicResource Fg2}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- Вибір черги: розкривається під заголовком -->
+                    <Border Margin="0,12,0,0" Padding="6" CornerRadius="12" Background="{DynamicResource Soft}"
+                            Visibility="{Binding QueuesOpen, Converter={StaticResource Vis}}">
+                        <ScrollViewer MaxHeight="168" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Queues}" Margin="0,0,2,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="6"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource Flat}" Command="{Binding Pick}" Background="{Binding Bg}"
+                                                Margin="2" Padding="0,6" HorizontalContentAlignment="Center">
+                                            <TextBlock Text="{Binding Id}" FontSize="13" Foreground="{Binding Fg}" FontWeight="{Binding Weight}"/>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <!-- Скільки триває стан + «Вимкнули» / «Увімкнули» -->
+                    <DockPanel Margin="0,14,0,0" Visibility="{Binding HasBigRow, Converter={StaticResource Vis}}">
+                        <Button Style="{StaticResource Pill}" Command="{Binding ToggleManualCommand}" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Background="Transparent" BorderBrush="{DynamicResource Line}"
+                                ToolTip="{Binding ManualTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <Viewbox Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="{StaticResource BoltGeometry}" Stroke="{DynamicResource Fg2}" StrokeThickness="2.2" StrokeLineJoin="Round"/>
+                                        <Path Data="M3,3 L21,21" Stroke="{DynamicResource Fg2}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              Visibility="{Binding ManualIconStrike, Converter={StaticResource Vis}}"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock Text="{Binding ManualButtonText}" FontSize="12.5" Foreground="{DynamicResource Fg2}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding BigText}" FontSize="40" FontWeight="Bold" Foreground="{DynamicResource Fg}"
+                                       Typography.NumeralAlignment="Tabular" VerticalAlignment="Bottom"/>
+                            <TextBlock Text="{Binding BigLabel}" FontSize="13" Foreground="{DynamicResource Fg2}"
+                                       VerticalAlignment="Bottom" Margin="10,0,0,8" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DockPanel>
+                </StackPanel>
+
+                <!-- ГРАФІК -->
+                <StackPanel Margin="18,14,18,6">
+                    <Border Margin="0,0,0,14" Padding="12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
+                            Visibility="{Binding IsEmergency, Converter={StaticResource Vis}}">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AlertFg}" Text="{Binding EmergencyBanner}"/>
+                            <Button Style="{StaticResource Flat}" Command="{Binding OpenPostCommand}" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                    Visibility="{Binding HasEmergencyPost, Converter={StaticResource Vis}}">
+                                <TextBlock Text="Відкрити повідомлення →" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource AlertFg}"/>
+                            </Button>
                         </StackPanel>
                     </Border>
 
-                    <Button Style="{StaticResource HoverFlat}" Command="{Binding CollapseCommand}" ToolTip="Закрити"
-                            Width="30" Height="30" Margin="0,12,12,0" HorizontalAlignment="Right" VerticalAlignment="Top"
-                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                        <Path Data="M3.5,3.5 L10.5,10.5 M10.5,3.5 L3.5,10.5" Stroke="{DynamicResource Fg3}" StrokeThickness="1.6"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="14" Height="14"/>
-                    </Button>
-                </Grid>
-
-                <!-- ГРАФІК -->
-                <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,4,18,18">
-                    <StackPanel>
-                        <Border Margin="0,14,0,0" Padding="12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
-                                Visibility="{Binding IsEmergency, Converter={StaticResource Vis}}">
-                            <StackPanel>
-                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AlertFg}"
-                                           Text="{Binding EmergencyBanner}"/>
-                                <Button Style="{StaticResource Flat}" Command="{Binding OpenPostCommand}" Margin="0,6,0,0"
-                                        HorizontalAlignment="Left"
-                                        Visibility="{Binding HasEmergencyPost, Converter={StaticResource Vis}}">
-                                    <TextBlock Text="Відкрити повідомлення →" FontSize="12.5" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AlertFg}"/>
-                                </Button>
-                            </StackPanel>
-                        </Border>
-
-                        <Button Style="{StaticResource HoverFlat}" Command="{Binding ToggleManualCommand}" Margin="0,12,0,0"
-                                Padding="12,9" HorizontalContentAlignment="Left" Background="{DynamicResource Soft}"
-                                ToolTip="Якщо світла немає, а графік каже, що є (або навпаки)">
-                            <TextBlock Text="{Binding ManualButtonText}" FontSize="13" Foreground="{DynamicResource Fg}"/>
-                        </Button>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <Button Style="{StaticResource Flat}" Command="{Binding TodayCommand}" Background="{Binding TodayTabBg}"
-                                    Padding="12,7">
-                                <TextBlock Text="{Binding TodayTab}" FontSize="13" Foreground="{Binding TodayTabFg}"/>
+                    <!-- Перемикач «Сьогодні / Завтра» -->
+                    <Border Padding="3" CornerRadius="10" Background="{DynamicResource Soft}">
+                        <UniformGrid Columns="2">
+                            <Button Style="{StaticResource Segment}" Command="{Binding TodayCommand}" Background="{Binding TodayTabBg}">
+                                <TextBlock Text="Сьогодні" FontSize="13" Foreground="{Binding TodayTabFg}" FontWeight="{Binding TodayTabWeight}"/>
                             </Button>
-                            <Button Style="{StaticResource Flat}" Command="{Binding TomorrowCommand}" Background="{Binding TomorrowTabBg}"
-                                    Padding="12,7" Margin="4,0,0,0">
-                                <TextBlock Text="{Binding TomorrowTab}" FontSize="13" Foreground="{Binding TomorrowTabFg}"/>
+                            <Button Style="{StaticResource Segment}" Command="{Binding TomorrowCommand}" Background="{Binding TomorrowTabBg}">
+                                <TextBlock Text="Завтра" FontSize="13" Foreground="{Binding TomorrowTabFg}" FontWeight="{Binding TomorrowTabWeight}"/>
                             </Button>
-                        </StackPanel>
+                        </UniformGrid>
+                    </Border>
 
-                        <!-- Є графік на обраний день -->
-                        <StackPanel Visibility="{Binding HasDayData, Converter={StaticResource Vis}}">
+                    <StackPanel Visibility="{Binding HasDayData, Converter={StaticResource Vis}}">
                             <!-- Смуга графіка: суцільні шматки, позначка «зараз», підписи годин під поділками -->
-                            <Canvas Width="362" Height="{Binding TimelineHeight}" HorizontalAlignment="Left" Margin="0,10,0,0" ClipToBounds="False">
+                            <Canvas Width="362" Height="{Binding TimelineHeight}" HorizontalAlignment="Left" Margin="0,12,0,0" ClipToBounds="False">
                                 <!-- «Зараз»: підпис-пігулка над смугою -->
                                 <Border Canvas.Left="{Binding NowLabelX}" Canvas.Top="0" Width="42" Height="18" CornerRadius="9"
                                         Background="{DynamicResource Fg}"
@@ -264,77 +327,41 @@
                                 </ItemsControl>
                             </Canvas>
 
-                            <ItemsControl ItemsSource="{Binding Intervals}" Margin="0,12,0,0">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="0,8"
-                                                Opacity="{Binding Opacity}">
-                                            <DockPanel>
-                                                <Border Width="8" Height="8" CornerRadius="2" Background="{Binding Chip}"
-                                                        VerticalAlignment="Center" DockPanel.Dock="Left"/>
-                                                <TextBlock Text="{Binding Range}" Width="106" Margin="10,0,0,0" FontSize="13.5"
-                                                           Foreground="{DynamicResource Fg}" DockPanel.Dock="Left"/>
-                                                <TextBlock Text="{Binding Dur}" FontSize="13.5" Foreground="{DynamicResource Fg3}"
-                                                           DockPanel.Dock="Right"/>
-                                                <TextBlock Text="{Binding Label}" FontSize="13.5" Foreground="{DynamicResource Fg2}"/>
-                                            </DockPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-
-                        <!-- Немає графіка на обраний день -->
-                        <Border Margin="0,16,0,0" Padding="16,22" CornerRadius="12" Background="{DynamicResource Soft}"
-                                Visibility="{Binding NoDayData, Converter={StaticResource Vis}}">
-                            <StackPanel>
-                                <TextBlock Text="{Binding NoDayTitle}" FontSize="14" FontWeight="SemiBold" TextAlignment="Center"
-                                           Foreground="{DynamicResource Fg}" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding NoDayHint}" FontSize="12.5" Margin="0,6,0,0" TextAlignment="Center"
-                                           Foreground="{DynamicResource Fg2}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Легенда -->
-                        <WrapPanel Margin="0,14,0,0">
-                            <WrapPanel.Resources>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="FontSize" Value="12"/>
-                                    <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
-                                    <Setter Property="Margin" Value="6,0,14,0"/>
-                                </Style>
-                            </WrapPanel.Resources>
-                            <Border Width="8" Height="8" CornerRadius="2" Background="#36C66A"/>
-                            <TextBlock Text="Світло є"/>
-                            <Border Width="8" Height="8" CornerRadius="2" Background="#F2C14E"/>
-                            <TextBlock Text="Планове відключення"/>
-                            <Border Width="8" Height="8" CornerRadius="2" Background="#F0574D"/>
-                            <TextBlock Text="Аварійне"/>
-                        </WrapPanel>
-
-                        <!-- Черги -->
-                        <StackPanel Visibility="{Binding HasQueues, Converter={StaticResource Vis}}">
-                            <TextBlock Text="ЧЕРГА" Margin="0,18,0,0" FontSize="11.5" Foreground="{DynamicResource Fg3}"/>
-                            <ScrollViewer MaxHeight="150" Margin="-2.5,6,-2.5,0" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding Queues}" Margin="0,0,4,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <UniformGrid Columns="6"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Button Style="{StaticResource Flat}" Command="{Binding Pick}" Background="{Binding Bg}"
-                                                    Margin="2.5" Padding="0,7" HorizontalContentAlignment="Center">
-                                                <TextBlock Text="{Binding Id}" FontSize="13" Foreground="{Binding Fg}"
-                                                           FontWeight="{Binding Weight}"/>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </StackPanel>
+                        <TextBlock Text="{Binding NextTitle}" Margin="0,6,0,2" FontSize="11.5" Foreground="{DynamicResource Fg3}"/>
+                        <ItemsControl ItemsSource="{Binding NextRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="0,8">
+                                        <DockPanel>
+                                            <Border Width="8" Height="8" CornerRadius="2" Background="{Binding Chip}" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="{Binding Range}" Width="110" Margin="10,0,0,0" FontSize="13.5"
+                                                       Foreground="{DynamicResource Fg}" DockPanel.Dock="Left" Typography.NumeralAlignment="Tabular"/>
+                                            <TextBlock Text="{Binding Dur}" FontSize="13.5" Foreground="{DynamicResource Fg3}" DockPanel.Dock="Right"/>
+                                            <TextBlock Text="{Binding Label}" FontSize="13.5" Foreground="{DynamicResource Fg2}"/>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding NextEmpty}" FontSize="13" Foreground="{DynamicResource Fg2}" Margin="0,4,0,4"
+                                   Visibility="{Binding HasNextEmpty, Converter={StaticResource Vis}}"/>
                     </StackPanel>
+
+                    <!-- Немає графіка на обраний день -->
+                    <Border Margin="0,12,0,8" Padding="16,20" CornerRadius="12" Background="{DynamicResource Soft}"
+                            Visibility="{Binding NoDayData, Converter={StaticResource Vis}}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding NoDayTitle}" FontSize="14" FontWeight="SemiBold" TextAlignment="Center"
+                                       Foreground="{DynamicResource Fg}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding NoDayHint}" FontSize="12.5" Margin="0,6,0,0" TextAlignment="Center"
+                                       Foreground="{DynamicResource Fg2}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Нижній рядок: область · постачальник · оновлено -->
+                <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,10">
+                    <TextBlock Text="{Binding Footer}" FontSize="11.5" Foreground="{DynamicResource Fg3}" TextTrimming="CharacterEllipsis"/>
                 </Border>
             </StackPanel>
         </Border>
