@@ -122,6 +122,9 @@ namespace Lumos
         private static readonly Regex SpaceRx = new(@"\s+");
         private static readonly Regex TimeRx = new(@"(\d{1,2})\s*[-:.]\s*(\d{2})");
         private static readonly Regex QueueRx = new(@"([1-6])\s*(?:\(\s*([12](?:\s*[,;]\s*[12])*)\s*\))?");
+        private static readonly Regex EmergencyRx = new(
+            @"(застосов\w*|діють|діятимуть|запроваджен\w*|введено|вводяться)\s+(\S+\s+){0,3}(аварійн|екстрен)",
+            RegexOptions.IgnoreCase);
         private static readonly Regex DateRx = new(@"(\d{1,2})\s+(" + string.Join("|", Months) + ")", RegexOptions.IgnoreCase);
 
         private static string Text(string htmlPart) =>
@@ -138,6 +141,11 @@ namespace Lumos
 
             int start = page.IndexOf("class=\"article\"", StringComparison.Ordinal);
             if (start > 0) page = page.Substring(start);
+
+            // Аварійні: Укрзалізниця пише про них у заголовку над таблицями («…застосовуються графіки аварійних відключень»).
+            int firstTable = page.IndexOf("<table", StringComparison.OrdinalIgnoreCase);
+            string heading = Text(page.Substring(0, firstTable > 0 ? firstTable : Math.Min(page.Length, 20000)));
+            region.Emergency = EmergencyRx.IsMatch(heading);
 
             int position = 0, tableIndex = 0;
             foreach (Match table in TableRx.Matches(page))

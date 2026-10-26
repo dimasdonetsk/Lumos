@@ -23,6 +23,10 @@ namespace Lumos
     internal static class EmergencyMonitor
     {
         private const string Ukrenergo = "Ukrenergo";
+        // Загальний канал ДТЕК: пише про екстрені відключення в Києві, Київщині, Одещині, Дніпропетровщині.
+        private const string Dtek = "dtek_ua";
+        private static readonly HashSet<string> DtekRegions = new()
+            { "kyiv", "kiivska-oblast", "odeska-oblast", "dnipropetrovska-oblast", "dnipro-dnem", "donetska-oblast" };
         private static readonly TimeSpan Window = TimeSpan.FromHours(6);
 
         // Канали обленерго. Їх пости стосуються лише своєї області, тож згадка області не потрібна.
@@ -126,7 +130,11 @@ namespace Lumos
                 foreach (string ch in channels)
                     checks.Add(CheckChannelAsync(ch, ch, null));
             if (RegionStems.TryGetValue(regionId, out string[]? stems))
+            {
                 checks.Add(CheckChannelAsync(Ukrenergo, "Укренерго", stems));
+                if (DtekRegions.Contains(regionId))
+                    checks.Add(CheckChannelAsync(Dtek, "ДТЕК", stems));
+            }
 
             EmergencyInfo?[] results = await Task.WhenAll(checks).ConfigureAwait(false);
             return results.Where(r => r != null).OrderByDescending(r => r!.Time).FirstOrDefault();
