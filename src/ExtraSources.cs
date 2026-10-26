@@ -16,7 +16,7 @@ namespace Lumos
     /// </summary>
     internal static class ExtraSources
     {
-        private enum Kind { DtekJson, Mykolaiv, KirovohradTelegram }
+        private enum Kind { DtekJson, Mykolaiv, KirovohradTelegram, VolynImage }
 
         private sealed record Source(string Id, string Name, Kind Kind, string Url);
 
@@ -36,6 +36,8 @@ namespace Lumos
             // Кіровоградобленерго: графік текстом у районних Telegram-каналах.
             new("kirovohradska-oblast", "Кіровоградська область", Kind.KirovohradTelegram,
                 "https://t.me/s/SvitloKropyvnytskyiMisto"),
+            // Волиньобленерго: графік лише картинкою, розпізнаємо кольори клітинок (VolynImage).
+            new("volynska-oblast", "Волинська область", Kind.VolynImage, "https://api-voe-poweron.inneti.net"),
         };
 
         private static readonly Dictionary<string, (RegionData Data, DateTime At)> Fetched = new();
@@ -44,7 +46,7 @@ namespace Lumos
         private static HttpClient CreateClient()
         {
             var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Lumos/0.8");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Lumos/0.10");
             client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("uk,en;q=0.5");
             return client;
         }
@@ -99,6 +101,9 @@ namespace Lumos
                         break;
                     case Kind.KirovohradTelegram:
                         ParseKirovohrad(await Http.GetStringAsync(source.Url).ConfigureAwait(false), region);
+                        break;
+                    case Kind.VolynImage:
+                        await FetchVolynAsync(source.Url, region).ConfigureAwait(false);
                         break;
                 }
                 return region;
@@ -228,6 +233,82 @@ namespace Lumos
             Match m = Regex.Match(s, @"^(\d{1,2}):(\d{2})");
             return m.Success ? int.Parse(m.Groups[1].Value) * 60 + int.Parse(m.Groups[2].Value) : null;
         }
+
+        // ───────────────────────────── Волиньобленерго ─────────────────────────────
+
+        // Розпізнані картинки за адресою: кожне завантаження має нове ім'я файлу,
+        // тож та сама адреса — та сама картинка, качати й розпізнавати її вдруге не треба.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, int[]>> VolynDecoded = new();
+
+        /// <summary>
+        /// GET /api/options → адреси картинок «сьогодні» і «завтра»; GET /api/archive_gpv_graphs → на який день кожна
+        /// (ключ «сьогодні» пізно ввечері вже показує завтрашню картинку, тож дату беремо з архіву).
+        /// </summary>
+        private static async Task FetchVolynAsync(string baseUrl, RegionData region)
+        {
+            string optionsUrl = baseUrl + "/api/options?option_key[]=pw_gpv_image_today&option_key[]=pw_gpv_image_tomorrow";
+            var paths = new List<string>();
+            using (var request = new HttpRequestMessage(HttpMethod.Get, optionsUrl))
+            {
+                request.Headers.TryAddWithoutValidation("Accept", "application/ld+json");
+                using HttpResponseMessage response = await Http.SendAsync(request).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                using JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false));
+                foreach (JsonElement m in Members(doc.RootElement))
+                    if (m.TryGetProperty("value", out JsonElement v) && v.GetString() is string path &&
+                        Regex.IsMatch(path, @"^/media/[\w/.-]+\.png$"))
+                        paths.Add(path);
+            }
+            if (paths.Count == 0) return; // графіків зараз немає
+
+            DateTime since = StatusEngine.KyivNow().Date.AddDays(-1);
+            var versions = new Dictionary<string, (long Id, DateTime Day)>();
+            using (var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + "/api/archive_gpv_graphs?dateGraph[after]=" + since.ToString("yyyy-MM-dd")))
+            {
+                request.Headers.TryAddWithoutValidation("Accept", "application/ld+json");
+                using HttpResponseMessage response = await Http.SendAsync(request).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                using JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false));
+                foreach (JsonElement m in Members(doc.RootElement))
+                {
+                    if (!m.TryGetProperty("id", out JsonElement idEl) || !idEl.TryGetInt64(out long id) ||
+                        !m.TryGetProperty("dateGraph", out JsonElement dg) || dg.GetString() is not string dateGraph ||
+                        !m.TryGetProperty("imageUrl", out JsonElement img) || img.ValueKind != JsonValueKind.Object ||
+                        !img.TryGetProperty("contentUrl", out JsonElement cu) || cu.GetString() is not string contentUrl)
+                        continue;
+                    // dateGraph — київська північ (позначена як UTC): беремо дату як написано.
+                    if (DateTime.TryParse(dateGraph.Substring(0, Math.Min(10, dateGraph.Length)), CultureInfo.InvariantCulture,
+                            DateTimeStyles.None, out DateTime day))
+                        versions[contentUrl] = (id, day.Date);
+                }
+            }
+
+            var latest = new Dictionary<DateTime, (string Path, long Id)>();
+            foreach (string path in paths)
+                if (versions.TryGetValue(path, out var ver) && (!latest.TryGetValue(ver.Day, out var cur) || cur.Id < ver.Id))
+                    latest[ver.Day] = (path, ver.Id);
+
+            foreach (var (day, (path, _)) in latest)
+            {
+                if (!VolynDecoded.TryGetValue(path, out var groups))
+                {
+                    byte[] png = await Http.GetByteArrayAsync(baseUrl + path).ConfigureAwait(false);
+                    groups = await Task.Run(() => VolynImage.Parse(VolynImage.Decode(png))).ConfigureAwait(false);
+                    VolynDecoded[path] = groups;
+                }
+                string dayKey = day.ToString("yyyy-MM-dd");
+                foreach (var (queue, slots) in groups) region.Queues[queue][dayKey] = slots;
+            }
+
+            // Старі картинки пам'ятати не треба.
+            foreach (string old in VolynDecoded.Keys.Where(k => !latest.Values.Any(v => v.Path == k)).ToList())
+                VolynDecoded.TryRemove(old, out _);
+        }
+
+        private static IEnumerable<JsonElement> Members(JsonElement root) =>
+            root.TryGetProperty("hydra:member", out JsonElement members) && members.ValueKind == JsonValueKind.Array
+                ? members.EnumerateArray().Take(100).ToList()
+                : new List<JsonElement>();
 
         // ───────────────────────────── Кіровоградобленерго ─────────────────────────────
 

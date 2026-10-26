@@ -9,7 +9,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Lumos</AssemblyName>
     <RootNamespace>Lumos</RootNamespace>
-    <Version>0.9.6</Version>
+    <Version>0.10.0</Version>
     <Product>Lumos</Product>
     <Description>Графік відключень світла в треї Windows</Description>
     <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>
@@ -26,6 +26,10 @@
 
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lumos.Tests" />
   </ItemGroup>
 
   <ItemGroup>
