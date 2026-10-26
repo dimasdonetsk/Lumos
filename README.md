@@ -1,4 +1,10 @@
-# Lumos
+<p align="center"><img src="docs/icon.png" width="96" alt=""></p>
+<h1 align="center">Lumos</h1>
+<p align="center">Графік відключень світла в треї Windows</p>
+<p align="center"><a href="https://github.com/dimasdonetsk/Lumos/releases/latest"><b>Завантажити Lumos-win-Setup.exe</b></a></p>
+
+<p align="center"><img src="docs/preview.png" alt="Карточка Lumos: темна і світла теми"></p>
+
 
 Графік відключень світла для Windows: плашка вгорі екрана і іконка в треї.
 
