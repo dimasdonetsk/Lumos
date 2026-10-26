@@ -15,6 +15,8 @@ namespace Lumos
         public string Id = "";
         public string Name = "";
         public bool Emergency;
+        /// <summary>Область з додаткового джерела (ExtraSources), а не з основного агрегатора.</summary>
+        public bool Extra;
         /// <summary>черга → дата (yyyy-MM-dd) → 48 слотів по 30 хв (1 = світло є, інше = немає).</summary>
         public Dictionary<string, Dictionary<string, int[]>> Queues = new();
 

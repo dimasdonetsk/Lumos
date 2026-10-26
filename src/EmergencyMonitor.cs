@@ -45,6 +45,7 @@ namespace Lumos
             ["mykolaivska-oblast"] = new[] { "mk_energy_ua" },
             ["sumska-oblast"] = new[] { "SumyEnergo" },
             ["dnipro-cek"] = new[] { "cek_info" },
+            ["kirovohradska-oblast"] = new[] { "SvitloKropyvnytskyiMisto" },
         };
 
         // Як область згадується в тексті (з великої літери, щоб не ловити випадкові збіги).

@@ -19,17 +19,13 @@ namespace Lumos
         private System.Drawing.Point _menuAnchor;
 
         // Області, для яких графік зараз неможливо отримати.
+        // Області, графік яких програма поки не може отримати, і чому.
         private static readonly (string Name, string Why)[] NotPublished =
         {
-            ("Донецька", "ДТЕК не публікує з 12.2024"),
-            ("Херсонська", "лише в особистому кабінеті"),
-            ("Луганська", "не публікується"),
-            ("АР Крим, Севастополь", "тимчасово окуповані"),
+            ("Волинська", "графік лише картинкою"),
+            ("Сумська", "сайт не віддає графік стороннім програмам"),
+            ("Херсонська", "графік лише в особистому кабінеті"),
         };
-
-        // Області, які додамо в наступних версіях (якщо їх ще немає в джерелі).
-        private static readonly string[] Planned =
-            { "Вінницька", "Волинська", "Дніпропетровська", "Кіровоградська", "Миколаївська", "Одеська", "Сумська" };
 
         public TrayController(AppController app)
         {
@@ -164,17 +160,10 @@ namespace Lumos
 
             // Області без графіків
             var missing = Sub("Області без графіків");
-            missing.DropDownItems.Add(Info("Не публікують графік:"));
             foreach ((string name, string why) in NotPublished)
-                missing.DropDownItems.Add(Info("   " + name + "  —  " + why));
-            var planned = Planned.Where(p => snap == null || !snap.Regions.Any(r => r.Name.StartsWith(p, StringComparison.CurrentCulture))).ToList();
-            if (planned.Count > 0)
-            {
-                missing.DropDownItems.Add(new WF.ToolStripSeparator());
-                missing.DropDownItems.Add(Info("Додамо в наступних версіях:"));
-                foreach (string p in planned)
-                    missing.DropDownItems.Add(Info("   " + p));
-            }
+                missing.DropDownItems.Add(Info(name + "  —  " + why));
+            missing.DropDownItems.Add(new WF.ToolStripSeparator());
+            missing.DropDownItems.Add(Item("Що потрібно, щоб додати", () => Open(Updater.RepoUrl + "#області-без-графіків")));
             Add(_menu.Items, missing);
 
             var sources = Sub("Джерела даних");

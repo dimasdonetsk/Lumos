@@ -102,7 +102,10 @@ namespace Lumos
             {
                 Snapshot? snap = await DataService.FetchAsync(Snapshot);
                 if (snap != null) Snapshot = snap;
-                await FetchUzAsync(false);
+                Snapshot ??= new Snapshot { FromCache = true };
+                await ExtraSources.MergeAsync(Snapshot, Settings.RegionId, _forceRefresh);
+                await FetchUzAsync(_forceRefresh);
+                _forceRefresh = false;
 
                 // Перший запуск: підказати, що треба обрати область.
                 if (!_hintShown && Settings.RegionId == null && snap != null)
@@ -120,9 +123,11 @@ namespace Lumos
             ScheduleTrim();
         }
 
+        private bool _forceRefresh;
+
         public void RefreshNow()
         {
-            _uzFetchedAt = default;
+            _forceRefresh = true;
             _ = FetchAsync();
         }
 
@@ -341,6 +346,8 @@ namespace Lumos
 
         private async Task RefreshRegionAsync()
         {
+            if (Snapshot != null && ExtraSources.IsExtra(Settings.RegionId))
+                await ExtraSources.MergeAsync(Snapshot, Settings.RegionId, false);
             await FetchUzAsync(true);
             Update();
             await CheckEmergencyAsync();
