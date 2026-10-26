@@ -9,10 +9,20 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Lumos</AssemblyName>
     <RootNamespace>Lumos</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Product>Lumos</Product>
     <Description>Графік відключень світла в треї Windows</Description>
     <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>
+
+    <!-- Економія пам'яті й процесора для програми, що весь час сидить у треї -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Збирач сміття частіше стискає пам'ять замість того, щоб її нарощувати -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+    <RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
+  </ItemGroup>
 
 </Project>

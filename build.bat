@@ -15,7 +15,7 @@ if errorlevel 1 (
 
 dotnet publish "%~dp0src\Lumos.csproj" -c Release -r win-x64 --self-contained true ^
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
-  -p:EnableCompressionInSingleFile=true -o "%~dp0out"
+  -o "%~dp0out"
 
 if errorlevel 1 (
   echo.

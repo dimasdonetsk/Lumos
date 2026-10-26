@@ -6,7 +6,10 @@ using System.Windows.Media;
 
 namespace Lumos
 {
-    /// <summary>Спливаюче вікно над значком у треї. Ховається, щойно клікнеш деінде.</summary>
+    /// <summary>
+    /// Спливаюче вікно над значком у треї. Створюється при відкритті і повністю закривається,
+    /// коли клікнеш деінде, щоб не тримати в пам'яті інтерфейс, якого не видно.
+    /// </summary>
     public partial class OverlayWindow : Window
     {
         private const int GWL_EXSTYLE = -20;
@@ -19,18 +22,18 @@ namespace Lumos
         // Прозорі відступи навколо карточки (місце для тіні), див. Grid Margin у XAML.
         private const double PadLeft = 16, PadTop = 12, PadRight = 16, PadBottom = 20;
 
+        private readonly OverlayViewModel _vm;
         private System.Drawing.Point _anchorPx;
-
-        /// <summary>Коли вікно сховалося востаннє (щоб клік по значку не відкривав його одразу знову).</summary>
-        public DateTime LastHidden { get; private set; } = DateTime.MinValue;
+        private bool _closing;
 
         public OverlayWindow(OverlayViewModel vm)
         {
             InitializeComponent();
+            _vm = vm;
             DataContext = vm;
             SizeChanged += (_, _) => Place();
-            Deactivated += (_, _) => HideFlyout();
-            vm.CloseRequested += HideFlyout;
+            Deactivated += (_, _) => RequestClose();
+            vm.CloseRequested += RequestClose;
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -51,11 +54,19 @@ namespace Lumos
             SetForegroundWindow(new WindowInteropHelper(this).Handle);
         }
 
-        public void HideFlyout()
+        /// <summary>Закрити вікно. Через диспетчер, бо його часто викликають з обробника Deactivated.</summary>
+        public void RequestClose()
         {
-            if (!IsVisible) return;
-            Hide();
-            LastHidden = DateTime.Now;
+            if (_closing) return;
+            _closing = true;
+            Dispatcher.BeginInvoke(new Action(Close));
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _vm.CloseRequested -= RequestClose;
+            DataContext = null;
+            base.OnClosed(e);
         }
 
         private void Place()
@@ -102,6 +113,32 @@ namespace Lumos
 
             Left = left;
             Top = top;
+        }
+    }
+
+    /// <summary>Повертає системі пам'ять, яку програма вже не використовує.</summary>
+    internal static class MemoryHelper
+    {
+        [DllImport("kernel32.dll")]
+        private static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr minimum, IntPtr maximum);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+
+        public static void Trim()
+        {
+            try
+            {
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+                SetProcessWorkingSetSize(GetCurrentProcess(), new IntPtr(-1), new IntPtr(-1));
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Trim: " + ex.Message);
+            }
         }
     }
 }

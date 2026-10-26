@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -45,27 +46,55 @@ namespace Lumos
         private static HttpClient CreateClient()
         {
             var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Lumos/0.3 (Windows; power outage tray)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Lumos/0.4 (Windows; power outage tray)");
             return client;
         }
 
-        public static async Task<Snapshot?> FetchAsync()
+        private static string? _etag;
+
+        /// <summary>
+        /// Завантажує графіки. Якщо файл на сервері не змінився з минулого разу, повертає поточні дані
+        /// без повторного завантаження і розбору.
+        /// </summary>
+        public static async Task<Snapshot?> FetchAsync(Snapshot? current)
         {
             try
             {
-                string json = await Http.GetStringAsync(SourceUrl).ConfigureAwait(false);
-                Snapshot? snap = Parse(json);
+                using var request = new HttpRequestMessage(HttpMethod.Get, SourceUrl);
+                if (_etag != null && current != null && !current.FromCache)
+                    request.Headers.TryAddWithoutValidation("If-None-Match", _etag);
+
+                using HttpResponseMessage response =
+                    await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.NotModified && current != null)
+                {
+                    current.FetchedAt = DateTime.Now;
+                    return current;
+                }
+                response.EnsureSuccessStatusCode();
+
+                byte[] bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                Snapshot? snap = Parse(bytes);
                 if (snap != null)
                 {
+                    _etag = response.Headers.ETag?.Tag;
                     snap.FetchedAt = DateTime.Now;
                     Directory.CreateDirectory(Settings.DataDir);
-                    File.WriteAllText(CachePath, json);
+                    File.WriteAllBytes(CachePath, bytes);
                     return snap;
                 }
             }
             catch (Exception ex)
             {
                 Log.Write("Fetch: " + ex.Message);
+            }
+
+            // Немає інтернету: лишаємо те, що вже є, або беремо з диска.
+            if (current != null)
+            {
+                current.FromCache = true;
+                return current;
             }
             return LoadCache();
         }
@@ -75,7 +104,7 @@ namespace Lumos
             try
             {
                 if (!File.Exists(CachePath)) return null;
-                Snapshot? snap = Parse(File.ReadAllText(CachePath));
+                Snapshot? snap = Parse(File.ReadAllBytes(CachePath));
                 if (snap != null)
                 {
                     snap.FromCache = true;
@@ -90,9 +119,14 @@ namespace Lumos
             }
         }
 
-        public static Snapshot? Parse(string json)
+        public static Snapshot? Parse(byte[] utf8Json)
         {
-            using JsonDocument doc = JsonDocument.Parse(json);
+            using JsonDocument doc = JsonDocument.Parse(utf8Json);
+            return Parse(doc);
+        }
+
+        private static Snapshot? Parse(JsonDocument doc)
+        {
             JsonElement root = doc.RootElement;
             if (!root.TryGetProperty("regions", out JsonElement regions) || regions.ValueKind != JsonValueKind.Array)
                 return null;

@@ -106,7 +106,7 @@ namespace Lumos
         private static HttpClient CreateClient()
         {
             var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Lumos/0.3");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Lumos/0.4");
             client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("uk,en;q=0.5");
             return client;
         }

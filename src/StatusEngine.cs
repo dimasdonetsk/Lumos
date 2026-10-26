@@ -93,17 +93,15 @@ namespace Lumos
         public static string Clock(int minutes) => (minutes / 60) + ":" + (minutes % 60).ToString("00");
 
         /// <summary>Поточний час у Києві, щоб графік був правильний навіть з іншим часовим поясом на ПК.</summary>
-        public static DateTime KyivNow()
+        public static DateTime KyivNow() =>
+            KyivZone != null ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, KyivZone) : DateTime.Now;
+
+        private static readonly TimeZoneInfo? KyivZone = FindKyivZone();
+
+        private static TimeZoneInfo? FindKyivZone()
         {
-            try
-            {
-                TimeZoneInfo tz = TimeZoneInfo.FindSystemTimeZoneById("FLE Standard Time");
-                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            }
-            catch
-            {
-                return DateTime.Now;
-            }
+            try { return TimeZoneInfo.FindSystemTimeZoneById("FLE Standard Time"); }
+            catch { return null; }
         }
     }
 }

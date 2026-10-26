@@ -17,7 +17,11 @@ namespace Lumos
         private readonly OverlayViewModel _vm = new();
         private OverlayWindow? _window;
         private TrayController? _tray;
-        private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(15) };
+        // Хвилинна точність: графік іде кроком 30 хв, таймер щосекунди не потрібен.
+        private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(30) };
+        // Звільнити пам'ять трохи згодом після закриття вікна або оновлення даних.
+        private readonly DispatcherTimer _trim = new() { Interval = TimeSpan.FromSeconds(3) };
+        private DateTime _lastClosed = DateTime.MinValue;
         private readonly DispatcherTimer _fetch = new() { Interval = TimeSpan.FromMinutes(5) };
 
         private readonly HashSet<string> _notified = new();
@@ -27,8 +31,7 @@ namespace Lumos
         private System.Drawing.Point? _lastAnchor;
         private bool _fetching;
 
-        // Аварійні відключення з Telegram (Укренерго і обленерго).
-        private readonly DispatcherTimer _emergencyTimer = new() { Interval = TimeSpan.FromMinutes(5) };
+        // Аварійні відключення з Telegram (Укренерго і обленерго), перевіряються разом з оновленням графіка.
         private EmergencyInfo? _tgEmergency;
         private string? _tgRegion;
         private bool _checkingEmergency;
@@ -45,15 +48,17 @@ namespace Lumos
             _vm.QueuePicked += SetQueue;
             _vm.ManualToggled += ToggleManualOff;
             _vm.OpenUrl += OpenUrl;
-            _window = new OverlayWindow(_vm);
             _tray = new TrayController(this);
 
             _tick.Tick += (_, _) => Update();
             _fetch.Tick += async (_, _) => await FetchAsync();
-            _emergencyTimer.Tick += async (_, _) => await CheckEmergencyAsync();
+            _trim.Tick += (_, _) =>
+            {
+                _trim.Stop();
+                if (_window == null) MemoryHelper.Trim();
+            };
             _tick.Start();
             _fetch.Start();
-            _emergencyTimer.Start();
 
             Update();
             _ = FetchAsync();
@@ -67,7 +72,7 @@ namespace Lumos
             _fetching = true;
             try
             {
-                Snapshot? snap = await DataService.FetchAsync();
+                Snapshot? snap = await DataService.FetchAsync(Snapshot);
                 if (snap != null) Snapshot = snap;
 
                 // Перший запуск: підказати, що треба обрати область.
@@ -83,9 +88,16 @@ namespace Lumos
             }
             Update();
             await CheckEmergencyAsync();
+            ScheduleTrim();
         }
 
         public void RefreshNow() => _ = FetchAsync();
+
+        private void ScheduleTrim()
+        {
+            _trim.Stop();
+            _trim.Start();
+        }
 
         private async Task CheckEmergencyAsync()
         {
@@ -144,6 +156,8 @@ namespace Lumos
                 status.Kind = StatusKind.ManualOff;
 
             IReadOnlyList<string> queues = region?.SortedQueues().ToList() ?? new List<string>();
+            // Поки вікно закрите, малювати графік не треба: рахуємо лише статус для іконки й сповіщень.
+            _vm.IsActive = _window != null;
             _vm.Apply(status, today, tomorrow, now, region?.Name ?? "", queue ?? "", queues, needsSetup,
                       Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince);
             _tray?.Update(status.Kind, _vm.TrayText);
@@ -218,9 +232,22 @@ namespace Lumos
         public void ShowSchedule(System.Drawing.Point anchorPx)
         {
             _lastAnchor = anchorPx;
+            if (_window == null)
+            {
+                _window = new OverlayWindow(_vm);
+                _window.Closed += (_, _) =>
+                {
+                    _window = null;
+                    _vm.IsActive = false;
+                    _lastClosed = DateTime.Now;
+                    ScheduleTrim();
+                };
+            }
+            _trim.Stop();
+            _vm.IsActive = true;
             _vm.OpenSchedule();
             Update();
-            _window?.ShowAt(anchorPx);
+            _window.ShowAt(anchorPx);
         }
 
         public void ShowSchedule() => ShowSchedule(_lastAnchor ?? DefaultAnchor());
@@ -228,13 +255,13 @@ namespace Lumos
         /// <summary>Лівий клік по значку: відкрити або закрити.</summary>
         public void ToggleFromTray(System.Drawing.Point anchorPx)
         {
-            if (_window == null) return;
-            // Клік по значку спершу ховає вікно (воно втрачає фокус), тож не відкриваємо його одразу знову.
-            if (_window.IsVisible || (DateTime.Now - _window.LastHidden).TotalMilliseconds < 400)
+            if (_window != null)
             {
-                _window.HideFlyout();
+                _window.RequestClose();
                 return;
             }
+            // Клік по значку спершу закриває вікно (воно втрачає фокус), тож не відкриваємо його одразу знову.
+            if ((DateTime.Now - _lastClosed).TotalMilliseconds < 400) return;
             ShowSchedule(anchorPx);
         }
 
@@ -303,7 +330,7 @@ namespace Lumos
         {
             _tick.Stop();
             _fetch.Stop();
-            _emergencyTimer.Stop();
+            _trim.Stop();
             _tray?.Dispose();
             _window?.Close();
         }

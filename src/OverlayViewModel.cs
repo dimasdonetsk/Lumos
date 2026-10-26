@@ -84,6 +84,9 @@ namespace Lumos
             OpenPostCommand = new RelayCommand(() => { if (_emergencyInfo?.Url.Length > 0) OpenUrl?.Invoke(_emergencyInfo.Url); });
         }
 
+        /// <summary>Чи відкрите вікно. Коли ні, графік і кнопки не перераховуються.</summary>
+        public bool IsActive { get; set; }
+
         public ICommand ToggleManualCommand { get; }
         public ICommand OpenPostCommand { get; }
         public bool IsManual => _manualSince != null;
@@ -255,6 +258,7 @@ namespace Lumos
                 ? _emergencyInfo.Source + ", " + _emergencyInfo.Time.ToString("HH:mm") + ": " + Shorten(_emergencyInfo.Text, 240)
                 : "Діють аварійні відключення. Графік нижче зараз не діє: світло можуть вимкнути будь-коли.";
 
+            if (!IsActive) return;
             RenderDay(now);
             RenderQueues();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
