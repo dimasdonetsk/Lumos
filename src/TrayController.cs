@@ -263,7 +263,7 @@ namespace Lumos
                 Color green = ColorTranslator.FromHtml("#36C66A");
                 Color yellow = ColorTranslator.FromHtml("#F2C14E");
                 Color red = ColorTranslator.FromHtml("#F0574D");
-                Color grey = ColorTranslator.FromHtml("#9E92AF");
+                Color grey = ColorTranslator.FromHtml("#8E8E96");
 
                 switch (kind)
                 {

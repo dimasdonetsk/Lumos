@@ -4,14 +4,14 @@
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
         <!-- Кольори теми. Значення підміняє Theme.Apply() під час запуску і при перемиканні теми. -->
-        <SolidColorBrush x:Key="Card" Color="#241C2E"/>
-        <SolidColorBrush x:Key="Line" Color="#3A2F48"/>
-        <SolidColorBrush x:Key="Line2" Color="#30273D"/>
-        <SolidColorBrush x:Key="Fg" Color="#F1ECF7"/>
-        <SolidColorBrush x:Key="Fg2" Color="#B3A7C4"/>
-        <SolidColorBrush x:Key="Fg3" Color="#9E92AF"/>
-        <SolidColorBrush x:Key="TabOn" Color="#33293F"/>
-        <SolidColorBrush x:Key="Soft" Color="#2C2337"/>
+        <SolidColorBrush x:Key="Card" Color="#0E0E11"/>
+        <SolidColorBrush x:Key="Line" Color="#24242A"/>
+        <SolidColorBrush x:Key="Line2" Color="#1C1C21"/>
+        <SolidColorBrush x:Key="Fg" Color="#F0F0F2"/>
+        <SolidColorBrush x:Key="Fg2" Color="#A6A6AE"/>
+        <SolidColorBrush x:Key="Fg3" Color="#8E8E96"/>
+        <SolidColorBrush x:Key="TabOn" Color="#2B2B32"/>
+        <SolidColorBrush x:Key="Soft" Color="#18181C"/>
         <SolidColorBrush x:Key="AlertBg" Color="#3E1B1C"/>
         <SolidColorBrush x:Key="AlertFg" Color="#FFB8B1"/>
     </Application.Resources>

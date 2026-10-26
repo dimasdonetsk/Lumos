@@ -17,7 +17,7 @@ namespace Lumos
         public static SolidColorBrush StatusGreen => IsLight ? LightGreen : CellGreen;
         public static SolidColorBrush StatusYellow => IsLight ? LightYellow : CellYellow;
         public static SolidColorBrush StatusRed => IsLight ? LightRed : CellRed;
-        public static SolidColorBrush StatusGrey => IsLight ? Make("#5A6A80") : Make("#9E92AF");
+        public static SolidColorBrush StatusGrey => IsLight ? Make("#5A6A80") : Make("#8E8E96");
 
         private static readonly SolidColorBrush LightGreen = Make("#17803F");
         private static readonly SolidColorBrush LightYellow = Make("#8A6200");
@@ -27,7 +27,7 @@ namespace Lumos
         public static readonly SolidColorBrush TileGreen = Make("#2636C66A");
         public static readonly SolidColorBrush TileYellow = Make("#2EF2C14E");
         public static readonly SolidColorBrush TileRed = Make("#2BF0574D");
-        public static readonly SolidColorBrush TileGrey = Make("#229E92AF");
+        public static readonly SolidColorBrush TileGrey = Make("#228E8E96");
 
         public static SolidColorBrush Get(string key) =>
             Application.Current.Resources[key] as SolidColorBrush ?? Brushes.Gray;
@@ -44,10 +44,10 @@ namespace Lumos
             }
             else
             {
-                Set("Card", "#241C2E"); Set("Line", "#3A2F48"); Set("Line2", "#30273D");
-                Set("Fg", "#F1ECF7"); Set("Fg2", "#B3A7C4"); Set("Fg3", "#9E92AF");
-                Set("TabOn", "#43375A"); Set("Soft", "#2C2337");
-                Set("AlertBg", "#3E1B1C"); Set("AlertFg", "#FFB8B1");
+                Set("Card", "#0E0E11"); Set("Line", "#24242A"); Set("Line2", "#1C1C21");
+                Set("Fg", "#F0F0F2"); Set("Fg2", "#A6A6AE"); Set("Fg3", "#8E8E96");
+                Set("TabOn", "#2B2B32"); Set("Soft", "#18181C");
+                Set("AlertBg", "#2E1416"); Set("AlertFg", "#FFB8B1");
             }
         }
 
