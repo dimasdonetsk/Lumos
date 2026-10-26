@@ -141,6 +141,23 @@ namespace Lumos
                 warn.DropDownItems.Add(Radio(label, s.WarnMinutes == m, () => _app.Change(x => x.WarnMinutes = m)));
             }
             Add(_menu.Items, warn);
+
+            // EcoFlow
+            if (_app.EcoConnected)
+            {
+                StationStatus? st = _app.Station;
+                var eco = Sub("EcoFlow" + (st != null ? "   ·  " + st.Soc + "%" : ""));
+                eco.DropDownItems.Add(Info((s.EcoName ?? "Станція") + (st != null
+                    ? " · " + (st.Charging ? "заряджається " + st.InW + " Вт" : st.Discharging ? "віддає " + st.OutW + " Вт" : "очікує")
+                    : " · немає даних")));
+                eco.DropDownItems.Add(new WF.ToolStripSeparator());
+                eco.DropDownItems.Add(Toggle("Нагадувати поставити на зарядку", s.EcoRemind, v => _app.Change(x => x.EcoRemind = v)));
+                eco.DropDownItems.Add(Item("Налаштувати…", () => _app.OpenStationWindow()));
+                eco.DropDownItems.Add(Item("Відключити", () => _app.DisconnectStation()));
+                Add(_menu.Items, eco);
+            }
+            else
+                Add(_menu.Items, Item("Підключити EcoFlow…", () => _app.OpenStationWindow()));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
             Add(_menu.Items, Toggle("Запускати при вході", s.Autostart, v => _app.Change(x => x.Autostart = v)));

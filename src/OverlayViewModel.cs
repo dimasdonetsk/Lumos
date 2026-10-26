@@ -179,6 +179,25 @@ namespace Lumos
         public bool NowVisible { get; private set; }
         public string NowLabel { get; private set; } = "";
 
+        // EcoFlow
+        private bool _ecoConnected;
+        private StationStatus? _station;
+        private string? _stationError;
+        private string? _stationName;
+        public bool HasStation { get; private set; }
+        public string StationSoc { get; private set; } = "";
+        public double StationFill { get; private set; }
+        public Brush StationBrush { get; private set; } = Brushes.Gray;
+        public string StationTitle { get; private set; } = "";
+        public string StationHint { get; private set; } = "";
+        public Brush StationHintBrush { get; private set; } = Brushes.Gray;
+        public bool StationCharging { get; private set; }
+
+        public void SetStation(bool connected, StationStatus? station, string? error, string? name)
+        {
+            _ecoConnected = connected; _station = station; _stationError = error; _stationName = name;
+        }
+
         // Черги
         public IReadOnlyList<QueueVm> Queues { get; private set; } = Array.Empty<QueueVm>();
         public bool HasQueues => Queues.Count > 0;
@@ -298,9 +317,79 @@ namespace Lumos
                 : "Діють аварійні відключення. Графік нижче зараз не діє: світло можуть вимкнути будь-коли.";
 
             if (!IsActive) return;
+            RenderStation(now);
             RenderDay(now);
             RenderQueues();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        }
+
+        private void RenderStation(int now)
+        {
+            HasStation = _ecoConnected;
+            if (!HasStation) return;
+            StationHintBrush = Theme.Get("Fg3");
+            StationCharging = false;
+            StationSoc = ""; StationFill = 0; StationBrush = Theme.Get("Fg3");
+
+            StationStatus? st = _station;
+            if (st == null)
+            {
+                StationTitle = "EcoFlow";
+                StationHint = _stationError ?? "Підключаюсь до станції…";
+                return;
+            }
+
+            StationSoc = st.Soc + "%";
+            StationFill = Math.Max(st.Soc > 0 ? 2 : 0, 20 * st.Soc / 100.0); // внутрішня ширина батарейки 20 px
+            StationBrush = st.Soc <= 20 ? Theme.StatusRed : st.Soc <= 50 ? Theme.StatusYellow : Theme.StatusGreen;
+            StationCharging = st.Charging;
+
+            if (st.Charging)
+                StationTitle = "Заряджається · " + st.InW + " Вт" + (st.SolarW > st.AcInW ? " від сонця" : "");
+            else if (st.Discharging)
+                StationTitle = "Віддає " + st.OutW + " Вт";
+            else
+                StationTitle = st.Soc >= 100 && st.GridPowered ? "Заряджена, від мережі" : "Очікує · навантаження немає";
+
+            bool lightOn = _status.Kind is StatusKind.On or StatusKind.ManualOn;
+            string hint;
+            Brush brush = Theme.Get("Fg3");
+            if (st.Charging && st.ChargeMin is int cm)
+            {
+                int full = now + cm;
+                hint = "Повна о " + StatusEngine.Hm(full);
+                if (lightOn && _status.NextOutage is Interval o && o.Start > now)
+                {
+                    bool makes = full <= o.Start;
+                    hint += makes ? ", до відключення встигне" : ", до відключення о " + StatusEngine.Hm(o.Start) + " не встигне";
+                    brush = makes ? Theme.StatusGreen : Theme.StatusYellow;
+                }
+            }
+            else if (st.Discharging && st.DischargeMin is int dm)
+            {
+                int end = now + dm;
+                string endText = dm >= 24 * 60 ? "надовго" : "до " + StatusEngine.Hm(end);
+                if (_status.Kind == StatusKind.Off && _status.NextChange is int onAt && onAt > now)
+                {
+                    bool lasts = end >= onAt;
+                    hint = lasts
+                        ? "Вистачить " + endText + ", світло о " + StatusEngine.Hm(onAt)
+                        : "Сяде о " + StatusEngine.Hm(end) + ", а світло лише о " + StatusEngine.Hm(onAt);
+                    brush = lasts ? Theme.StatusGreen : Theme.StatusRed;
+                }
+                else hint = "Вистачить " + endText;
+            }
+            else if (lightOn && !st.GridPowered && st.Soc < 95)
+            {
+                hint = "Світло є, а станція не заряджається";
+                brush = Theme.StatusYellow;
+            }
+            else hint = st.GridPowered ? "Від розетки йде струм" : "Від розетки не заряджається";
+
+            if (_stationError != null) { hint = _stationError + " · дані о " + st.At.ToString("HH:mm"); brush = Theme.Get("Fg3"); }
+            else if (DateTime.Now - st.At > TimeSpan.FromMinutes(15)) hint += " · дані о " + st.At.ToString("HH:mm");
+            StationHint = hint;
+            StationHintBrush = brush;
         }
 
         private void RenderDay(int now)

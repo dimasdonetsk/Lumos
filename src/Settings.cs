@@ -26,6 +26,19 @@ namespace Lumos
         /// <summary>Коли людина натиснула «Світло повернулося» — звідси рахується, скільки світло вже є.</summary>
         public DateTime? LightBackAt { get; set; }
 
+        // EcoFlow. Режим: null — не підключено, "Keys" — ключі розробника, "Login" — логін застосунку.
+        public string? EcoMode { get; set; }
+        public string? EcoHost { get; set; }
+        public string? EcoAccessKey { get; set; }
+        /// <summary>Secret Key і пароль зберігаються зашифрованими (DPAPI, лише для цього користувача Windows).</summary>
+        public string? EcoSecretEnc { get; set; }
+        public string? EcoEmail { get; set; }
+        public string? EcoPasswordEnc { get; set; }
+        public string? EcoSn { get; set; }
+        public string? EcoName { get; set; }
+        /// <summary>Нагадувати поставити станцію на зарядку, коли світло є, а вона не заряджається.</summary>
+        public bool EcoRemind { get; set; } = true;
+
         public static string DataDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Lumos");
 

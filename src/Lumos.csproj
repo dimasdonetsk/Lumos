@@ -9,7 +9,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Lumos</AssemblyName>
     <RootNamespace>Lumos</RootNamespace>
-    <Version>0.12.1</Version>
+    <Version>0.13.0</Version>
     <Product>Lumos</Product>
     <Description>Графік відключень світла в треї Windows</Description>
     <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>
@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

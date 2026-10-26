@@ -44,6 +44,19 @@ namespace Lumos
         private RegionData? _uzRegion;
         private DateTime _uzFetchedAt;
 
+        // EcoFlow: раз на 3 хв у фоні, частіше — поки відкрита карточка.
+        private readonly DispatcherTimer _ecoTimer = new() { Interval = TimeSpan.FromMinutes(3) };
+        private StationStatus? _station;
+        private string? _stationError;
+        private bool _ecoBusy;
+        private string? _remindedFor;
+        private int _notChargingPolls;
+        private bool _lowWarned;
+        private Status _lastStatus = new();
+
+        public bool EcoConnected => Settings.EcoMode != null && !string.IsNullOrEmpty(Settings.EcoSn);
+        public StationStatus? Station => _station;
+
         public bool IsUzProvider => UzSource.IsUz(Settings.RegionId);
         public RegionData? CurrentRegion => IsUzProvider
             ? (_uzRegion?.Id == Settings.RegionId ? _uzRegion : null)
@@ -76,8 +89,10 @@ namespace Lumos
                 _updateTimer.Interval = TimeSpan.FromHours(6);
                 await CheckUpdatesAsync(false);
             };
+            _ecoTimer.Tick += async (_, _) => await PollStationAsync();
             _tick.Start();
             _fetch.Start();
+            if (EcoConnected) { _ecoTimer.Start(); _ = PollStationAsync(); }
             if (Updater.IsInstalled) _updateTimer.Start();
 
             if (Program.UpdatedTo != null)
@@ -254,6 +269,8 @@ namespace Lumos
             IReadOnlyList<string> queues = region?.SortedQueues().ToList() ?? new List<string>();
             // Поки вікно закрите, малювати графік не треба: рахуємо лише статус для іконки й сповіщень.
             _vm.IsActive = _window != null;
+            _vm.SetStation(EcoConnected, _station, _stationError, Settings.EcoName);
+            _lastStatus = status;
             _vm.Apply(status, today, tomorrow, now, region?.Name ?? "", queue ?? "", queues, needsSetup,
                       Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince, stateSince);
             _tray?.Update(status.Kind, _vm.TrayText);
@@ -322,6 +339,99 @@ namespace Lumos
             if (Settings.Sound) SystemSounds.Exclamation.Play();
         }
 
+        // ───────────────────────────── EcoFlow ─────────────────────────────
+
+        public static Task<StationStatus> FetchStationAsync(Settings s) => s.EcoMode == "Keys"
+            ? EcoFlow.QuotaByKeysAsync(s.EcoHost ?? EcoFlow.HostEu, s.EcoAccessKey ?? "", EcoFlow.Unprotect(s.EcoSecretEnc), s.EcoSn!)
+            : EcoFlow.QuotaByLoginAsync(s.EcoEmail ?? "", EcoFlow.Unprotect(s.EcoPasswordEnc), s.EcoSn!);
+
+        private async Task PollStationAsync()
+        {
+            if (!EcoConnected || _ecoBusy) return;
+            _ecoBusy = true;
+            try
+            {
+                _station = await FetchStationAsync(Settings);
+                _stationError = null;
+            }
+            catch (Exception ex)
+            {
+                _stationError = ex is EcoFlow.EcoException ? ex.Message : "Немає зв'язку з EcoFlow";
+                Log.Write("EcoFlow: " + ex.Message);
+            }
+            finally
+            {
+                _ecoBusy = false;
+            }
+            Update();
+            CheckStation();
+            ScheduleTrim();
+        }
+
+        /// <summary>Нагадування: світло є, а станція не заряджається; заряд закінчується без світла.</summary>
+        private void CheckStation()
+        {
+            StationStatus? st = _station;
+            if (st == null || _stationError != null || !Settings.Notify) return;
+            Status status = _lastStatus;
+            DateTime now = StatusEngine.KyivNow();
+            int nowMin = now.Hour * 60 + now.Minute;
+            bool lightOn = status.Kind is StatusKind.On or StatusKind.ManualOn;
+
+            // Двічі поспіль (≈6 хв) світло є за графіком, а від розетки нічого не йде — нагадати один раз на цей проміжок.
+            if (Settings.EcoRemind && lightOn && !st.GridPowered && st.Soc < 95)
+            {
+                _notChargingPolls++;
+                string key = now.ToString("yyyy-MM-dd") + ":" + (status.CurrentStart ?? -1);
+                if (_notChargingPolls >= 2 && _remindedFor != key)
+                {
+                    _remindedFor = key;
+                    string until = status.NextOutage is Interval o ? " Світло є до " + StatusEngine.Hm(o.Start) + "." : "";
+                    Send("Постав EcoFlow на зарядку", "Світло є, а станція не заряджається: " + st.Soc + "%." + until);
+                }
+            }
+            else _notChargingPolls = 0;
+
+            // Без світла заряд упав до 20%.
+            if (!lightOn && st.Soc <= 20 && st.Discharging)
+            {
+                if (!_lowWarned)
+                {
+                    _lowWarned = true;
+                    string left = st.DischargeMin is int m ? " Вистачить приблизно до " + StatusEngine.Hm(nowMin + m) + "." : "";
+                    string on = status.NextChange is int onAt && status.Kind == StatusKind.Off ? " Світло за графіком о " + StatusEngine.Hm(onAt) + "." : "";
+                    Send("EcoFlow сідає: " + st.Soc + "%", "Вимкни зайве." + left + on);
+                }
+            }
+            else if (st.Soc > 25) _lowWarned = false;
+        }
+
+        /// <summary>Зберегти підключення з вікна «EcoFlow» і одразу оновити.</summary>
+        public void SetStationConnection(Action<Settings> apply)
+        {
+            EcoFlow.ForgetSession();
+            apply(Settings);
+            Settings.Save();
+            _station = null;
+            _stationError = null;
+            if (EcoConnected) { _ecoTimer.Start(); _ = PollStationAsync(); }
+            else _ecoTimer.Stop();
+            Update();
+        }
+
+        public void DisconnectStation() => SetStationConnection(s =>
+        {
+            s.EcoMode = null; s.EcoSn = null; s.EcoName = null; s.EcoAccessKey = null; s.EcoSecretEnc = null;
+            s.EcoEmail = null; s.EcoPasswordEnc = null; s.EcoHost = null;
+        });
+
+        public void OpenStationWindow()
+        {
+            var w = new EcoFlowWindow(this);
+            w.Show();
+            w.Activate();
+        }
+
         // ───────────────────────────── плашка ─────────────────────────────
 
         /// <summary>Відкрити карточку з графіком над точкою на екрані (зазвичай над значком у треї).</summary>
@@ -334,12 +444,18 @@ namespace Lumos
                 _window.Closed += (_, _) =>
                 {
                     _window = null;
+                    _ecoTimer.Interval = TimeSpan.FromMinutes(3);
                     _vm.IsActive = false;
                     _lastClosed = DateTime.Now;
                     ScheduleTrim();
                 };
             }
             _trim.Stop();
+            if (EcoConnected)
+            {
+                _ecoTimer.Interval = TimeSpan.FromSeconds(45);
+                if (_station == null || DateTime.Now - _station.At > TimeSpan.FromSeconds(40)) _ = PollStationAsync();
+            }
             _vm.IsActive = true;
             _vm.OpenSchedule();
             Update();
@@ -528,6 +644,7 @@ namespace Lumos
             _tick.Stop();
             _fetch.Stop();
             _trim.Stop();
+            _ecoTimer.Stop();
             _updateTimer.Stop();
             _tray?.Dispose();
             _window?.Close();

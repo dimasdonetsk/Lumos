@@ -92,3 +92,47 @@ namespace Lumos.Tests
             Assert.True(EmergencyMonitor.IsCancel("Аварійні відключення скасовано, повертаємось до графіків"));
     }
 }
+
+namespace Lumos.Tests
+{
+    public class EcoFlowTests
+    {
+        [Fact]
+        public void SignsSortedParamsThenKeys()
+        {
+            string sign = EcoFlow.Sign("secret", "AK", "123456", "1700000000000",
+                new[] { new System.Collections.Generic.KeyValuePair<string, string>("sn", "R621ZAB5XG00000") });
+            using var h = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes("secret"));
+            string expected = System.Convert.ToHexString(h.ComputeHash(System.Text.Encoding.UTF8.GetBytes(
+                "sn=R621ZAB5XG00000&accessKey=AK&nonce=123456&timestamp=1700000000000"))).ToLowerInvariant();
+            Xunit.Assert.Equal(expected, sign);
+        }
+
+        [Fact]
+        public void ParsesRiver2ProQuota()
+        {
+            var json = System.Text.Json.JsonDocument.Parse(
+                "{\"pd.soc\":64,\"inv.inputWatts\":0,\"mppt.inWatts\":0,\"pd.wattsOutSum\":118," +
+                "\"bms_emsStatus.dsgRemainTime\":250,\"bms_emsStatus.chgRemainTime\":5999}").RootElement;
+            StationStatus st = EcoFlow.Parse(json);
+            Xunit.Assert.Equal(64, st.Soc);
+            Xunit.Assert.Equal(118, st.OutW);
+            Xunit.Assert.Equal(250, st.DischargeMin);
+            Xunit.Assert.Null(st.ChargeMin); // 5999 — «невідомо»
+            Xunit.Assert.True(st.Discharging);
+            Xunit.Assert.False(st.Charging);
+            Xunit.Assert.False(st.GridPowered);
+        }
+
+        [Fact]
+        public void ChargingFromGrid()
+        {
+            var json = System.Text.Json.JsonDocument.Parse(
+                "{\"pd.soc\":\"40\",\"inv.inputWatts\":310,\"pd.wattsOutSum\":20,\"bms_bmsStatus.remainTime\":95}").RootElement;
+            StationStatus st = EcoFlow.Parse(json);
+            Xunit.Assert.True(st.Charging);
+            Xunit.Assert.True(st.GridPowered);
+            Xunit.Assert.Equal(95, st.ChargeMin);
+        }
+    }
+}

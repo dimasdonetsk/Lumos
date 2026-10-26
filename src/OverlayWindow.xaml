@@ -361,6 +361,34 @@
                     </Border>
                 </StackPanel>
 
+                <!-- EcoFlow: заряд станції і чи вистачить до світла -->
+                <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,11,18,11"
+                        Visibility="{Binding HasStation, Converter={StaticResource Vis}}">
+                    <DockPanel>
+                        <!-- Батарейка -->
+                        <Grid DockPanel.Dock="Left" Width="30" Height="16" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <Border Width="27" HorizontalAlignment="Left" CornerRadius="4" BorderThickness="1.5"
+                                    BorderBrush="{DynamicResource Fg3}" Padding="2">
+                                <Border HorizontalAlignment="Left" CornerRadius="2" Background="{Binding StationBrush}" Width="{Binding StationFill}">
+                                </Border>
+                            </Border>
+                            <Border Width="2.5" Height="6" CornerRadius="0,1.5,1.5,0" Background="{DynamicResource Fg3}"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <Path Data="M7.5,0 L2.5,7 L5.5,7 L4.5,12 L9.5,5 L6.5,5 Z" Fill="{DynamicResource Card}" Stroke="{DynamicResource Fg}"
+                                  StrokeThickness="0.8" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0"
+                                  Visibility="{Binding StationCharging, Converter={StaticResource Vis}}"/>
+                        </Grid>
+                        <TextBlock Text="{Binding StationSoc}" DockPanel.Dock="Right" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Fg}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                   Typography.NumeralAlignment="Tabular"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding StationTitle}" FontSize="12.5" Foreground="{DynamicResource Fg}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding StationHint}" FontSize="11.5" Margin="0,2,0,0" Foreground="{Binding StationHintBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
                 <!-- Нижній рядок: область · постачальник · оновлено -->
                 <Border BorderBrush="{DynamicResource Line2}" BorderThickness="0,1,0,0" Padding="18,10">
                     <TextBlock Text="{Binding Footer}" FontSize="11.5" Foreground="{DynamicResource Fg3}" TextTrimming="CharacterEllipsis"/>
