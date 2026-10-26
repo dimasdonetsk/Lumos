@@ -231,7 +231,16 @@ namespace Lumos
                     Detail = _emergencyInfo != null
                         ? _emergencyInfo.Source + " · " + _emergencyInfo.Time.ToString("HH:mm")
                         : "Графік не діє, стежимо за оновленнями";
-                    BigText = "Будь-коли"; BigLabel = "можуть вимкнути світло";
+                    // Скільки вже тривають аварійні — від часу повідомлення; без нього число не показуємо.
+                    if (_emergencyInfo != null)
+                    {
+                        BigText = StatusEngine.Clock(Math.Max(0, (int)(_kyivNow - _emergencyInfo.Time).TotalMinutes));
+                        BigLabel = "аварійні з " + _emergencyInfo.Time.ToString("HH:mm");
+                    }
+                    else
+                    {
+                        BigText = ""; BigLabel = "можуть вимкнути будь-коли";
+                    }
                     TrayText = "Аварійні відключення: графік не діє";
                     break;
 
