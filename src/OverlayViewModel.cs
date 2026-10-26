@@ -28,11 +28,16 @@ namespace Lumos
         public string Tip { get; init; } = "";
     }
 
-    public sealed class HourLabelVm
+    /// <summary>Підпис під смугою: час зміни (з засічкою) або край доби «00» / «24».</summary>
+    public sealed class TimeLabelVm
     {
-        public double Left { get; init; }
+        public double Left { get; init; }        // лівий край блоку підпису
+        public double TickOffset { get; init; }  // де засічка відносно блоку
+        public double TickHeight { get; init; }  // 0 — без засічки
+        public double TextTop { get; init; }
         public string Text { get; init; } = "";
-        public TextAlignment Align { get; init; }
+        public Brush Brush { get; init; } = Brushes.Gray;
+        public TextAlignment Align { get; init; } = TextAlignment.Center;
     }
 
     public sealed class IntervalVm
@@ -147,7 +152,8 @@ namespace Lumos
         public string NoDayTitle { get; private set; } = "";
         public string NoDayHint { get; private set; } = "";
         public IReadOnlyList<SegmentVm> Segments { get; private set; } = Array.Empty<SegmentVm>();
-        public IReadOnlyList<HourLabelVm> HourLabels { get; } = MakeHourLabels();
+        public IReadOnlyList<TimeLabelVm> TimeLabels { get; private set; } = Array.Empty<TimeLabelVm>();
+        public double TimelineHeight { get; private set; } = 70;
         public double NowX { get; private set; }
         public double NowLabelX { get; private set; }
         public IReadOnlyList<IntervalVm> Intervals { get; private set; } = Array.Empty<IntervalVm>();
@@ -289,6 +295,7 @@ namespace Lumos
             if (slots == null)
             {
                 Segments = Array.Empty<SegmentVm>();
+                TimeLabels = Array.Empty<TimeLabelVm>();
                 Intervals = Array.Empty<IntervalVm>();
                 if (_showTomorrow)
                 {
@@ -308,7 +315,10 @@ namespace Lumos
                 return;
             }
 
-            Segments = BuildSegments(StatusEngine.Intervals(slots), _showTomorrow ? -1 : now, IsEmergency);
+            List<Interval> intervals = StatusEngine.Intervals(slots);
+            Segments = BuildSegments(intervals, _showTomorrow ? -1 : now, IsEmergency);
+            TimeLabels = BuildTimeLabels(intervals, _showTomorrow ? -1 : now, out bool twoRows);
+            TimelineHeight = twoRows ? 84 : 70;
 
             Intervals = StatusEngine.Intervals(slots).Select(iv => new IntervalVm
             {
@@ -384,20 +394,51 @@ namespace Lumos
             };
         }
 
-        private static List<HourLabelVm> MakeHourLabels()
+        private const double LabelWidth = 36;
+
+        /// <summary>
+        /// Точний час кожної зміни під смугою. Минулі зміни приглушені. Якщо підписи наїжджають,
+        /// наступний опускається на другий рядок; якщо й там тісно — пропускається (час є в списку нижче).
+        /// </summary>
+        private static List<TimeLabelVm> BuildTimeLabels(List<Interval> intervals, int now, out bool twoRows)
         {
-            var labels = new List<HourLabelVm>();
-            const double w = 24;
-            for (int h = 0; h <= 24; h += 3)
+            var labels = new List<TimeLabelVm>();
+            double W = CellsWidth;
+            Brush future = Theme.Get("Fg"), pastBrush = Theme.Get("Fg3");
+            twoRows = false;
+
+            // Краї доби займають місце на першому рядку.
+            double[] rowRight = { 18, double.NegativeInfinity };
+            double edgeRight = W - 18;
+
+            for (int i = 0; i < intervals.Count - 1; i++)
             {
-                double x = h / 24.0 * CellsWidth;
-                labels.Add(new HourLabelVm
+                int m = intervals[i].End;
+                double x = Math.Round(m / 1440.0 * W);
+                double left = Math.Clamp(x - LabelWidth / 2, 0, W - LabelWidth);
+                double right = left + LabelWidth;
+
+                int row = -1;
+                if (left >= rowRight[0] + 4 && right <= edgeRight - 2) row = 0;
+                else if (left >= rowRight[1] + 4) row = 1;
+                if (row < 0) continue;
+                rowRight[row] = right;
+                if (row == 1) twoRows = true;
+
+                labels.Add(new TimeLabelVm
                 {
-                    Text = h.ToString("00"),
-                    Left = h == 0 ? 0 : h == 24 ? CellsWidth - w : x - w / 2,
-                    Align = h == 0 ? TextAlignment.Left : h == 24 ? TextAlignment.Right : TextAlignment.Center
+                    Left = left,
+                    TickOffset = x - left,
+                    TickHeight = row == 0 ? 4 : 18,
+                    TextTop = row == 0 ? 5 : 19,
+                    Text = StatusEngine.Hm(m),
+                    Brush = now >= 0 && m <= now ? pastBrush : future
                 });
             }
+
+            Brush edge = pastBrush;
+            labels.Add(new TimeLabelVm { Left = 0, TextTop = 5, Text = "00", Brush = edge, Align = TextAlignment.Left, TickHeight = 0 });
+            labels.Add(new TimeLabelVm { Left = W - LabelWidth, TextTop = 5, Text = "24", Brush = edge, Align = TextAlignment.Right, TickHeight = 0 });
             return labels;
         }
 
