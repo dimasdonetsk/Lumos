@@ -179,7 +179,7 @@
                             <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" Foreground="{Binding StatusBrush}"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Detail}" FontSize="13" Margin="0,2,0,0" Foreground="{DynamicResource Fg2}"
-                                       TextTrimming="CharacterEllipsis"/>
+                                       TextWrapping="Wrap" LineHeight="17" MaxHeight="34" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </DockPanel>
 

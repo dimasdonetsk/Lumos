@@ -212,7 +212,7 @@ namespace Lumos
                 case StatusKind.ManualOff:
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconOff = true;
                     Title = "Світла немає";
-                    Detail = "Не за графіком · позначено о " + _manualSince!.Value.ToString("HH:mm");
+                    Detail = "Не за графіком";
                     SetElapsed("без світла");
                     TrayText = "Світла немає (не за графіком)";
                     break;
@@ -220,7 +220,7 @@ namespace Lumos
                 case StatusKind.ManualOn:
                     StatusBrush = Theme.StatusGreen; TileBrush = Theme.TileGreen; IconOn = true;
                     Title = "Світло є";
-                    Detail = "Не за графіком · позначено о " + (_stateSince ?? _kyivNow).ToString("HH:mm");
+                    Detail = "Не за графіком";
                     SetElapsed("світло є");
                     TrayText = "Світло є (не за графіком)";
                     break;
