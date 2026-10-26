@@ -16,7 +16,6 @@ namespace Lumos
         private readonly WF.NotifyIcon _icon;
         private readonly WF.ContextMenuStrip _menu;
         private StatusKind? _iconKind;
-        private System.Drawing.Point _menuAnchor;
 
         // Області, для яких графік зараз неможливо отримати.
         // Області, графік яких програма поки не може отримати, і чому.
@@ -39,7 +38,7 @@ namespace Lumos
                 BackColor = DarkMenuRenderer.Back,
                 ForeColor = DarkMenuRenderer.Text,
             };
-            _menu.Opening += (_, _) => { _menuAnchor = WF.Cursor.Position; BuildMenu(); };
+            _menu.Opening += (_, _) => BuildMenu();
 
             _icon = new WF.NotifyIcon
             {
@@ -85,8 +84,6 @@ namespace Lumos
             _menu.Items.Clear();
 
             Add(_menu.Items, Item("Оновити зараз", () => _app.RefreshNow()));
-            Add(_menu.Items, Item("Показати графік", () => _app.ShowSchedule(_menuAnchor)));
-            Add(_menu.Items, Item(_app.IsManualOff ? "Світло повернулося" : "У мене немає світла", () => _app.ToggleManualOff()));
             EmergencyInfo? em = _app.TelegramEmergency;
             if (em != null && em.Url.Length > 0)
                 Add(_menu.Items, Item("Аварійні: відкрити повідомлення " + em.Source, () => _app.OpenUrl(em.Url)));
