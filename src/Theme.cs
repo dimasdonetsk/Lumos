@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace Lumos
 {
-    /// <summary>Дві теми: темна сливова і світла морозна.</summary>
+    /// <summary>Дві теми: темна і світла.</summary>
     internal static class Theme
     {
         public static bool IsLight { get; private set; }

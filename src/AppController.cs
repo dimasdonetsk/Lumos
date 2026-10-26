@@ -73,6 +73,12 @@ namespace Lumos
             if (Program.UpdatedTo != null)
                 _tray.Notify("Lumos оновлено", "Встановлено версію " + Program.UpdatedTo + ".");
 
+            if (Program.FirstRun)
+            {
+                _hintShown = true; // підказку замінює вікно «Lumos встановлено»
+                new WelcomeWindow().Show();
+            }
+
             Update();
             _ = FetchAsync();
         }

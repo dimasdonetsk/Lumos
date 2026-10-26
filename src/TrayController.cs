@@ -136,8 +136,8 @@ namespace Lumos
             Add(_menu.Items, Toggle("Сповіщати про новий графік", s.NotifyNewSchedule, v => _app.Change(x => x.NotifyNewSchedule = v)));
 
             var theme = Sub("Тема");
-            theme.DropDownItems.Add(Radio("Темна (сливова)", s.Theme != "Light", () => _app.Change(x => x.Theme = "Dark")));
-            theme.DropDownItems.Add(Radio("Світла (морозна)", s.Theme == "Light", () => _app.Change(x => x.Theme = "Light")));
+            theme.DropDownItems.Add(Radio("Темна", s.Theme != "Light", () => _app.Change(x => x.Theme = "Dark")));
+            theme.DropDownItems.Add(Radio("Світла", s.Theme == "Light", () => _app.Change(x => x.Theme = "Light")));
             Add(_menu.Items, theme);
             _menu.Items.Add(new WF.ToolStripSeparator());
 

@@ -17,7 +17,7 @@ namespace Lumos
         /// <summary>TopCenter, TopLeft, TopRight або TrayOnly.</summary>
         public string Position { get; set; } = "TopCenter";
         public bool HideWhenOn { get; set; }
-        /// <summary>Dark (сливова) або Light (морозна).</summary>
+        /// <summary>Dark (темна) або Light (світла).</summary>
         public string Theme { get; set; } = "Dark";
         /// <summary>Коли людина позначила «у мене немає світла» (null — не позначено).</summary>
         public DateTime? ManualOffSince { get; set; }
