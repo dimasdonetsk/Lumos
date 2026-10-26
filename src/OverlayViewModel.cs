@@ -17,10 +17,22 @@ namespace Lumos
         public void Execute(object? parameter) => _run();
     }
 
-    public sealed class CellVm
+    /// <summary>Шматок смуги графіка: суцільний проміжок «світло є» або «немає».</summary>
+    public sealed class SegmentVm
     {
+        public double Left { get; init; }
+        public double Width { get; init; }
         public Brush Brush { get; init; } = Brushes.Transparent;
         public double Opacity { get; init; } = 1;
+        public CornerRadius Corners { get; init; }
+        public string Tip { get; init; } = "";
+    }
+
+    public sealed class HourLabelVm
+    {
+        public double Left { get; init; }
+        public string Text { get; init; } = "";
+        public TextAlignment Align { get; init; }
     }
 
     public sealed class IntervalVm
@@ -134,11 +146,12 @@ namespace Lumos
         public bool NoDayData => !HasDayData;
         public string NoDayTitle { get; private set; } = "";
         public string NoDayHint { get; private set; } = "";
-        public IReadOnlyList<CellVm> Cells { get; private set; } = Array.Empty<CellVm>();
+        public IReadOnlyList<SegmentVm> Segments { get; private set; } = Array.Empty<SegmentVm>();
+        public IReadOnlyList<HourLabelVm> HourLabels { get; } = MakeHourLabels();
+        public double NowX { get; private set; }
+        public double NowLabelX { get; private set; }
         public IReadOnlyList<IntervalVm> Intervals { get; private set; } = Array.Empty<IntervalVm>();
         public bool NowVisible { get; private set; }
-        public Thickness NowLineMargin { get; private set; }
-        public Thickness NowLabelMargin { get; private set; }
         public string NowLabel { get; private set; } = "";
 
         // Черги
@@ -275,7 +288,7 @@ namespace Lumos
 
             if (slots == null)
             {
-                Cells = Array.Empty<CellVm>();
+                Segments = Array.Empty<SegmentVm>();
                 Intervals = Array.Empty<IntervalVm>();
                 if (_showTomorrow)
                 {
@@ -295,16 +308,7 @@ namespace Lumos
                 return;
             }
 
-            bool dimAll = IsEmergency;
-            int nowIndex = now / 30;
-            var cells = new List<CellVm>(48);
-            for (int i = 0; i < 48; i++)
-            {
-                bool off = StatusEngine.IsOff(slots[i]);
-                double opacity = dimAll ? 0.25 : (!_showTomorrow && i < nowIndex ? 0.38 : 1);
-                cells.Add(new CellVm { Brush = off ? Theme.CellYellow : Theme.CellGreen, Opacity = opacity });
-            }
-            Cells = cells;
+            Segments = BuildSegments(StatusEngine.Intervals(slots), _showTomorrow ? -1 : now, IsEmergency);
 
             Intervals = StatusEngine.Intervals(slots).Select(iv => new IntervalVm
             {
@@ -315,10 +319,86 @@ namespace Lumos
                 Opacity = !_showTomorrow && iv.End <= now ? 0.45 : 1
             }).ToList();
 
-            double x = now / 1440.0 * CellsWidth;
-            NowLineMargin = new Thickness(x - 1, -3, 0, -3);
-            NowLabelMargin = new Thickness(Math.Clamp(x - 16, 0, CellsWidth - 32), 0, 0, 2);
+            NowX = Math.Round(now / 1440.0 * CellsWidth) - 1;
+            NowLabelX = Math.Clamp(NowX + 1 - NowLabelWidth / 2, 0, CellsWidth - NowLabelWidth);
             NowLabel = _kyivNow.ToString("HH:mm");
+        }
+
+        public const double NowLabelWidth = 42;
+        private const double SegmentGap = 3;
+        private const double SegmentRadius = 6;
+
+        /// <summary>
+        /// Смуга з суцільних шматків замість 48 окремих клітинок: рівні краї, однакові проміжки,
+        /// минула частина приглушена, а шматок, на який припадає «зараз», ділиться навпіл без проміжку.
+        /// </summary>
+        private static List<SegmentVm> BuildSegments(List<Interval> intervals, int now, bool dimAll)
+        {
+            var result = new List<SegmentVm>();
+            double W = CellsWidth;
+            for (int i = 0; i < intervals.Count; i++)
+            {
+                Interval iv = intervals[i];
+                double x0 = Math.Round(iv.Start / 1440.0 * W) + (i > 0 ? SegmentGap / 2 : 0);
+                double x1 = Math.Round(iv.End / 1440.0 * W) - (i < intervals.Count - 1 ? SegmentGap / 2 : 0);
+                if (x1 - x0 < 1) continue;
+
+                Brush brush = iv.Off ? Theme.CellYellow : Theme.CellGreen;
+                string tip = StatusEngine.Hm(iv.Start) + " – " + StatusEngine.Hm(iv.End) + " · " +
+                             (iv.Off ? "немає світла" : "світло є") + " · " + StatusEngine.Duration(iv.End - iv.Start);
+                const double past = 0.32;
+
+                if (dimAll)
+                {
+                    result.Add(Segment(x0, x1, brush, 0.25, true, true, tip));
+                }
+                else if (now >= 0 && iv.End <= now)
+                {
+                    result.Add(Segment(x0, x1, brush, past, true, true, tip));
+                }
+                else if (now >= 0 && iv.Start < now)
+                {
+                    double xn = Math.Clamp(Math.Round(now / 1440.0 * W), x0 + 1, x1 - 1);
+                    result.Add(Segment(x0, xn, brush, past, true, false, tip));
+                    result.Add(Segment(xn, x1, brush, 1, false, true, tip));
+                }
+                else
+                {
+                    result.Add(Segment(x0, x1, brush, 1, true, true, tip));
+                }
+            }
+            return result;
+        }
+
+        private static SegmentVm Segment(double x0, double x1, Brush brush, double opacity, bool roundLeft, bool roundRight, string tip)
+        {
+            double r = Math.Min(SegmentRadius, (x1 - x0) / 2);
+            return new SegmentVm
+            {
+                Left = x0,
+                Width = x1 - x0,
+                Brush = brush,
+                Opacity = opacity,
+                Corners = new CornerRadius(roundLeft ? r : 0, roundRight ? r : 0, roundRight ? r : 0, roundLeft ? r : 0),
+                Tip = tip
+            };
+        }
+
+        private static List<HourLabelVm> MakeHourLabels()
+        {
+            var labels = new List<HourLabelVm>();
+            const double w = 24;
+            for (int h = 0; h <= 24; h += 3)
+            {
+                double x = h / 24.0 * CellsWidth;
+                labels.Add(new HourLabelVm
+                {
+                    Text = h.ToString("00"),
+                    Left = h == 0 ? 0 : h == 24 ? CellsWidth - w : x - w / 2,
+                    Align = h == 0 ? TextAlignment.Left : h == 24 ? TextAlignment.Right : TextAlignment.Center
+                });
+            }
+            return labels;
         }
 
         private static string Shorten(string text, int max) =>

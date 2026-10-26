@@ -40,6 +40,15 @@ namespace Lumos
         private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromMinutes(2) };
         private bool _updating;
 
+        // Графік Укрзалізниці (лише обраної області), оновлюється раз на 10 хв.
+        private RegionData? _uzRegion;
+        private DateTime _uzFetchedAt;
+
+        public bool IsUzProvider => UzSource.IsUz(Settings.RegionId);
+        public RegionData? CurrentRegion => IsUzProvider
+            ? (_uzRegion?.Id == Settings.RegionId ? _uzRegion : null)
+            : Snapshot?.Find(Settings.RegionId);
+
         public EmergencyInfo? TelegramEmergency => _tgEmergency;
         public bool IsManualOff => Settings.ManualOffSince != null;
 
@@ -93,6 +102,7 @@ namespace Lumos
             {
                 Snapshot? snap = await DataService.FetchAsync(Snapshot);
                 if (snap != null) Snapshot = snap;
+                await FetchUzAsync(false);
 
                 // Перший запуск: підказати, що треба обрати область.
                 if (!_hintShown && Settings.RegionId == null && snap != null)
@@ -110,7 +120,27 @@ namespace Lumos
             ScheduleTrim();
         }
 
-        public void RefreshNow() => _ = FetchAsync();
+        public void RefreshNow()
+        {
+            _uzFetchedAt = default;
+            _ = FetchAsync();
+        }
+
+        private async Task FetchUzAsync(bool force)
+        {
+            string? regionId = Settings.RegionId;
+            if (!UzSource.IsUz(regionId) || regionId == UzSource.Prefix) return;
+            bool stale = _uzRegion?.Id != regionId || DateTime.Now - _uzFetchedAt > TimeSpan.FromMinutes(9);
+            if (!force && !stale) return;
+
+            RegionData? data = await UzSource.FetchAsync(regionId!, _uzRegion);
+            if (Settings.RegionId != regionId) return; // область змінили, поки качали
+            if (data != null)
+            {
+                _uzRegion = data;
+                _uzFetchedAt = DateTime.Now;
+            }
+        }
 
         private void ScheduleTrim()
         {
@@ -148,7 +178,7 @@ namespace Lumos
             string todayKey = now.ToString("yyyy-MM-dd");
             string tomorrowKey = now.AddDays(1).ToString("yyyy-MM-dd");
 
-            RegionData? region = Snapshot?.Find(Settings.RegionId);
+            RegionData? region = CurrentRegion;
             string? queue = Settings.Queue;
             if (region != null && (queue == null || !region.Queues.ContainsKey(queue)))
                 queue = null;
@@ -297,15 +327,45 @@ namespace Lumos
         public void SetRegion(string regionId)
         {
             Settings.RegionId = regionId;
-            RegionData? region = Snapshot?.Find(regionId);
             // Чергу не вгадуємо: якщо в новій області такої немає, людина обирає сама.
-            if (region == null || Settings.Queue == null || !region.Queues.ContainsKey(Settings.Queue))
-                Settings.Queue = null;
+            bool queueValid = UzSource.IsUz(regionId)
+                ? Settings.Queue != null && UzSource.AllQueues.Contains(Settings.Queue)
+                : Snapshot?.Find(regionId) is RegionData region && Settings.Queue != null && region.Queues.ContainsKey(Settings.Queue);
+            if (!queueValid) Settings.Queue = null;
             Settings.Save();
             _tgEmergency = null;
             _tgRegion = null;
             ShowSchedule();
-            _ = CheckEmergencyAsync();
+            _ = RefreshRegionAsync();
+        }
+
+        private async Task RefreshRegionAsync()
+        {
+            await FetchUzAsync(true);
+            Update();
+            await CheckEmergencyAsync();
+        }
+
+        /// <summary>Перемкнути постачальника, зберігши ту саму область, якщо вона є в обох.</summary>
+        public void SetProvider(bool uz)
+        {
+            if (uz == IsUzProvider) return;
+            string? mapped = uz ? UzSource.FromOblenergo(Settings.RegionId)
+                                : (Settings.RegionId != null ? UzSource.ToOblenergo(Settings.RegionId) : null);
+            if (!uz && mapped != null && Snapshot != null && Snapshot.Find(mapped) == null) mapped = null;
+
+            if (mapped != null)
+            {
+                SetRegion(mapped);
+                return;
+            }
+            // Області немає в іншого постачальника: позначаємо вибір і просимо обрати область.
+            Settings.RegionId = uz ? UzSource.Prefix : null;
+            Settings.Save();
+            _tgEmergency = null;
+            _tgRegion = null;
+            Update();
+            ShowSchedule();
         }
 
         // ───────────────────────────── оновлення ─────────────────────────────

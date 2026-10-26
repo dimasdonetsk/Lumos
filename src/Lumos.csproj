@@ -9,7 +9,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>Lumos</AssemblyName>
     <RootNamespace>Lumos</RootNamespace>
-    <Version>0.5.1</Version>
+    <Version>0.6.0</Version>
     <Product>Lumos</Product>
     <Description>Графік відключень світла в треї Windows</Description>
     <SatelliteResourceLanguages>uk;en</SatelliteResourceLanguages>

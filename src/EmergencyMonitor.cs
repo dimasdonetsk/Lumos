@@ -112,13 +112,16 @@ namespace Lumos
         }
 
         public static string? ChannelFor(string? regionId) =>
-            regionId != null && RegionChannels.TryGetValue(regionId, out string[]? ch) ? ch[0] : null;
+            regionId != null && !UzSource.IsUz(regionId) && RegionChannels.TryGetValue(regionId, out string[]? ch) ? ch[0] : null;
 
         /// <summary>Найсвіжіше повідомлення про аварійні відключення в області, або null.</summary>
         public static async Task<EmergencyInfo?> CheckAsync(string regionId)
         {
             var checks = new List<Task<EmergencyInfo?>>();
-            if (RegionChannels.TryGetValue(regionId, out string[]? channels))
+            // Споживачі Укрзалізниці: канал обленерго їх не стосується, лише команди Укренерго по області.
+            if (UzSource.IsUz(regionId))
+                regionId = UzSource.ToOblenergo(regionId) ?? regionId;
+            else if (RegionChannels.TryGetValue(regionId, out string[]? channels))
                 foreach (string ch in channels)
                     checks.Add(CheckChannelAsync(ch, ch, null));
             if (RegionStems.TryGetValue(regionId, out string[]? stems))

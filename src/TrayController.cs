@@ -83,7 +83,7 @@ namespace Lumos
         {
             Settings s = _app.Settings;
             Snapshot? snap = _app.Snapshot;
-            RegionData? region = snap?.Find(s.RegionId);
+            RegionData? region = _app.CurrentRegion;
 
             DisposeItems(_menu.Items);
             _menu.Items.Clear();
@@ -96,9 +96,29 @@ namespace Lumos
                 Add(_menu.Items, Item("Аварійні: відкрити повідомлення " + em.Source, () => _app.OpenUrl(em.Url)));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
+            bool uz = _app.IsUzProvider;
+
+            // Постачальник: обленерго (або ДТЕК) чи Укрзалізниця
+            var providerMenu = Sub("Постачальник   ·  " + (uz ? "Укрзалізниця" : "Обленерго"));
+            providerMenu.DropDownItems.Add(Radio("Обленерго / ДТЕК", !uz, () => _app.SetProvider(false)));
+            providerMenu.DropDownItems.Add(Radio("Укрзалізниця", uz, () => _app.SetProvider(true)));
+            providerMenu.DropDownItems.Add(new WF.ToolStripSeparator());
+            providerMenu.DropDownItems.Add(Info("Укрзалізниця живить будинки біля залізниці."));
+            providerMenu.DropDownItems.Add(Info("Хто твій постачальник — видно в рахунку за світло."));
+            Add(_menu.Items, providerMenu);
+
             // Область
-            var regionMenu = Sub("Область" + (region != null ? "   ·  " + region.Name : ""));
-            if (snap == null || snap.Regions.Count == 0)
+            string regionLabel = region != null ? region.Name.Replace(" · Укрзалізниця", "") : "";
+            var regionMenu = Sub("Область" + (regionLabel.Length > 0 ? "   ·  " + regionLabel : ""));
+            if (uz)
+            {
+                foreach (var r in UzSource.Regions)
+                {
+                    string id = UzSource.Prefix + r.PageId;
+                    regionMenu.DropDownItems.Add(Radio(r.Name, id == s.RegionId, () => _app.SetRegion(id)));
+                }
+            }
+            else if (snap == null || snap.Regions.Count == 0)
                 regionMenu.DropDownItems.Add(Info("Дані ще завантажуються…"));
             else
                 foreach (RegionData r in snap.Regions)
@@ -111,7 +131,8 @@ namespace Lumos
             // Черга
             var queueMenu = Sub("Черга" + (s.Queue != null && region != null ? "   ·  " + s.Queue : ""));
             if (region == null)
-                queueMenu.DropDownItems.Add(Info("Спершу оберіть область"));
+                queueMenu.DropDownItems.Add(Info(uz && s.RegionId != null && s.RegionId != UzSource.Prefix
+                    ? "Завантажую графік…" : "Спершу оберіть область"));
             else
                 foreach (string q in region.SortedQueues())
                 {
@@ -159,6 +180,11 @@ namespace Lumos
             var sources = Sub("Джерела даних");
             sources.DropDownItems.Add(Item("UA Power Outages Monitor (GitHub)", () => Open(DataService.SourcePage)));
             sources.DropDownItems.Add(Item("Укренерго (Telegram)", () => Open("https://t.me/s/Ukrenergo")));
+            if (uz && s.RegionId != null && s.RegionId != UzSource.Prefix)
+            {
+                string uzUrl = UzSource.PageUrl(s.RegionId);
+                sources.DropDownItems.Add(Item("Укрзалізниця: графік області", () => Open(uzUrl)));
+            }
             string? channel = EmergencyMonitor.ChannelFor(s.RegionId);
             if (channel != null)
                 sources.DropDownItems.Add(Item("Обленерго (Telegram, @" + channel + ")", () => Open("https://t.me/s/" + channel)));
