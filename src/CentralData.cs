@@ -92,7 +92,8 @@ namespace Lumos
                                 if (day.Value.GetString() is string s && s.Length == 48 && s.All(c => c == '1' || c == '2'))
                                     days[day.Name] = s.Select(c => c - '0').ToArray();
                         }
-                    regions[region.Id] = region;
+                    // Область без жодного дня не замінює прямого завантаження.
+                    if (region.Queues.Values.Any(d => d.Count > 0)) regions[region.Id] = region;
                 }
 
             var emergency = new Dictionary<string, EmergencyInfo?>();
@@ -119,11 +120,19 @@ namespace Lumos
             var regions = new Dictionary<string, RegionData>();
 
             // Укрзалізниця: усі області.
+            // Сайт УЗ часто не відповідає закордонним серверам GitHub: якщо дві перші області підряд
+            // не завантажились через мережу, решту не чекаємо — програми візьмуть УЗ напряму.
+            int netFails = 0;
             foreach (var r in UzSource.Regions)
             {
                 string id = UzSource.Prefix + r.PageId;
-                try { regions[id] = await UzSource.FetchFreshAsync(id).ConfigureAwait(false); }
-                catch (Exception ex) { errors.Add(id + ": " + ex.Message); }
+                if (netFails >= 2) { errors.Add(id + ": skipped (uz.gov.ua unreachable)"); continue; }
+                try { regions[id] = await UzSource.FetchFreshAsync(id).ConfigureAwait(false); netFails = 0; }
+                catch (Exception ex)
+                {
+                    if (ex is HttpRequestException || ex is TaskCanceledException) netFails++;
+                    errors.Add(id + ": " + ex.Message);
+                }
             }
 
             // Області з окремих сайтів обленерго (Волинь, Миколаїв, Кіровоград).
@@ -139,6 +148,12 @@ namespace Lumos
             {
                 try { emergency[id] = await EmergencyMonitor.CheckAsync(id, strict: true).ConfigureAwait(false); }
                 catch (Exception ex) { errors.Add("emergency " + id + ": " + ex.Message); }
+            }
+
+            foreach (string id in regions.Where(kv => !kv.Value.Queues.Values.Any(d => d.Count > 0)).Select(kv => kv.Key).ToList())
+            {
+                regions.Remove(id);
+                errors.Add(id + ": no schedule days");
             }
 
             if (regions.Count == 0 && emergency.Count == 0) return 1;

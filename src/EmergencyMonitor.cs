@@ -231,6 +231,12 @@ namespace Lumos
                 if (mustMention != null && !Mentions(p.Text, mustMention)) continue;
 
                 if (CancelRx.IsMatch(p.Text)) return null;
+                // Опублікований погодинний графік (купа інтервалів «08:00 - 11:00») — це звичайні ГПВ, а не аварійні.
+                if (IsSchedulePost(p.Text))
+                {
+                    if (p.Text.Contains("завтра", StringComparison.OrdinalIgnoreCase)) continue;
+                    return null;
+                }
                 if (IsEmergency(p.Text))
                     return new EmergencyInfo { Source = source, Time = p.Time, Text = p.Text, Url = p.Url };
                 // Звичайний пост про графіки на сьогодні означає, що аварійні вже позаду.
@@ -241,9 +247,21 @@ namespace Lumos
             return null;
         }
 
+        private static readonly Regex RangeRx = new(@"\b\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\b", RegexOptions.CultureInvariant);
+
+        internal static bool IsSchedulePost(string text) =>
+            RangeRx.Matches(text).Count >= 4 &&
+            !SchedulesOffRx.IsMatch(text) &&
+            !EmergencyRx.IsMatch(text);
+
         internal static bool IsEmergency(string text)
         {
-            if (EmergencyRx.IsMatch(text) || GavRx.IsMatch(text)) return true;
+            if (EmergencyRx.IsMatch(text)) return true;
+            foreach (Match m in GavRx.Matches(text))
+            {
+                string before = text.Substring(Math.Max(0, m.Index - 60), Math.Min(60, m.Index));
+                if (!ConditionalRx.IsMatch(before)) return true;
+            }
             if (SchedulesOffRx.IsMatch(text) && Regex.IsMatch(text, @"аварійн|екстрен|знеструмлен", RegexOptions.IgnoreCase))
                 return true;
             foreach (Match m in MentionRx.Matches(text))

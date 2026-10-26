@@ -39,14 +39,14 @@ namespace Lumos
             {
                 Set("Card", "#EEF3F9"); Set("Line", "#D3DDEA"); Set("Line2", "#DFE6EF");
                 Set("Fg", "#142033"); Set("Fg2", "#4E5D73"); Set("Fg3", "#5A6A80");
-                Set("TabOn", "#DFE7F1"); Set("Soft", "#E3EAF3");
+                Set("TabOn", "#FFFFFF"); Set("Soft", "#DCE4EE");
                 Set("AlertBg", "#F9E3E1"); Set("AlertFg", "#9E2A1F");
             }
             else
             {
                 Set("Card", "#241C2E"); Set("Line", "#3A2F48"); Set("Line2", "#30273D");
                 Set("Fg", "#F1ECF7"); Set("Fg2", "#B3A7C4"); Set("Fg3", "#9E92AF");
-                Set("TabOn", "#33293F"); Set("Soft", "#2C2337");
+                Set("TabOn", "#43375A"); Set("Soft", "#2C2337");
                 Set("AlertBg", "#3E1B1C"); Set("AlertFg", "#FFB8B1");
             }
         }

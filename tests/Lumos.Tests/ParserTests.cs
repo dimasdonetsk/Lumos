@@ -77,6 +77,17 @@ namespace Lumos.Tests
             Assert.Equal(expected, EmergencyMonitor.IsEmergency(text));
 
         [Fact]
+        public void PublishedScheduleIsNotEmergency()
+        {
+            // Пост Черкасиобленерго з графіком: раніше хибно ставав «аварійним».
+            const string text = "Оновлення графіку погодинних відключень (ГПВ) на 26 жовтня Години відсутності електропостачання: " +
+                "1.1 08:00 - 11:00, 14:00 - 16:00 1.2 08:00 - 10:00, 14:00 - 17:00 2.1 08:00 - 10:00 " +
+                "У разі виникнення аварійної ситуації можливе застосування ГАВ.";
+            Assert.True(EmergencyMonitor.IsSchedulePost(text));
+            Assert.False(EmergencyMonitor.IsEmergency(text));
+        }
+
+        [Fact]
         public void RecognisesCancellation() =>
             Assert.True(EmergencyMonitor.IsCancel("Аварійні відключення скасовано, повертаємось до графіків"));
     }
