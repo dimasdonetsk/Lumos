@@ -27,7 +27,9 @@ namespace Lumos
         private const string Dtek = "dtek_ua";
         private static readonly HashSet<string> DtekRegions = new()
             { "kyiv", "kiivska-oblast", "odeska-oblast", "dnipropetrovska-oblast", "dnipro-dnem", "donetska-oblast" };
-        private static readonly TimeSpan Window = TimeSpan.FromHours(6);
+        // Аварійні оголошують раз і не повторюють, тож дивимося на добу назад:
+        // діють, доки не з'явиться пост про скасування або про повернення до графіків.
+        private static readonly TimeSpan Window = TimeSpan.FromHours(24);
 
         // Канали обленерго. Їх пости стосуються лише своєї області, тож згадка області не потрібна.
         private static readonly Dictionary<string, string[]> RegionChannels = new()
@@ -95,6 +97,23 @@ namespace Lumos
         private static readonly Regex GavRx = new(@"\bГАВ\b", RegexOptions.CultureInvariant);
 
         // Ознаки, що аварійні відключення скасовані.
+        // «аварійні знеструмлення», «екстрені відключення» — якщо це не умова («за відсутності аварійних…»).
+        private static readonly Regex MentionRx = new(
+            @"(аварійн|екстрен)\w*\s+(\S+\s+)?(відключен|знеструмлен|вимкнен)\w*",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex ConditionalRx = new(
+            @"(відсутн|у\s+разі|в\s+разі|можлив|умов|якщо|уникнути|не\s+виключ|попередж|ризик)\w*[^.!?]{0,40}$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // «Графіки погодинних відключень наразі не діють» — разом зі згадкою аварійних це однозначно.
+        private static readonly Regex SchedulesOffRx = new(
+            @"(графік\w*|ГПВ)\s+(\S+\s+){0,4}не\s+(діють|застосовуються|діятимуть)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // Повернення до звичайних графіків сьогодні: «діють графіки погодинних відключень», «ГПВ застосовуються».
+        private static readonly Regex SchedulesBackRx = new(
+            @"(?<!не\s)(діють|застосовуються|застосовано|запроваджено)\s+(\S+\s+){0,3}(графік|ГПВ)" +
+            @"|(графік\w*|ГПВ)\s+(\S+\s+){0,4}(?<!не\s)(діють|застосовуються)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
         private static readonly Regex CancelRx = new(
             @"скасов\w*|відмін\w*|завершен\w*|повернення\s+до\s+(графік|ГПВ)|повертаємо?ся\s+до\s+(графік|ГПВ)|повертаються\s+графік",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -188,21 +207,37 @@ namespace Lumos
 
         private static EmergencyInfo? Evaluate(List<Post> posts, string source, string[]? mustMention, DateTime now)
         {
-            // Від найновішого: перший доречний пост вирішує — діють аварійні чи вже скасовані.
+            // Від найновішого: перший доречний пост вирішує — діють аварійні чи вже ні.
             foreach (Post p in posts.OrderByDescending(p => p.Time))
             {
                 if (now - p.Time > Window) break;
                 if (mustMention != null && !Mentions(p.Text, mustMention)) continue;
 
-                bool emergency = EmergencyRx.IsMatch(p.Text) || GavRx.IsMatch(p.Text);
-                bool cancel = CancelRx.IsMatch(p.Text);
-                if (!emergency && !cancel) continue;
-                if (cancel) return null;
-
-                return new EmergencyInfo { Source = source, Time = p.Time, Text = p.Text, Url = p.Url };
+                if (CancelRx.IsMatch(p.Text)) return null;
+                if (IsEmergency(p.Text))
+                    return new EmergencyInfo { Source = source, Time = p.Time, Text = p.Text, Url = p.Url };
+                // Звичайний пост про графіки на сьогодні означає, що аварійні вже позаду.
+                // Пости про завтра цього не означають: аварійні можуть ще тривати.
+                if (SchedulesBackRx.IsMatch(p.Text) && !p.Text.Contains("завтра", StringComparison.OrdinalIgnoreCase))
+                    return null;
             }
             return null;
         }
+
+        internal static bool IsEmergency(string text)
+        {
+            if (EmergencyRx.IsMatch(text) || GavRx.IsMatch(text)) return true;
+            if (SchedulesOffRx.IsMatch(text) && Regex.IsMatch(text, @"аварійн|екстрен|знеструмлен", RegexOptions.IgnoreCase))
+                return true;
+            foreach (Match m in MentionRx.Matches(text))
+            {
+                string before = text.Substring(Math.Max(0, m.Index - 60), Math.Min(60, m.Index));
+                if (!ConditionalRx.IsMatch(before)) return true;
+            }
+            return false;
+        }
+
+        internal static bool IsCancel(string text) => CancelRx.IsMatch(text);
 
         private static bool Mentions(string text, string[] stems) =>
             stems.Any(s => text.Contains(s, StringComparison.Ordinal)) ||

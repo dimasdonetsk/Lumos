@@ -59,3 +59,25 @@ namespace Lumos.Tests
         }
     }
 }
+
+namespace Lumos.Tests
+{
+    public class EmergencyRulesTests
+    {
+        [Theory]
+        // Справжній пост Житомиробленерго, жовтень 2026.
+        [InlineData("Внаслідок ворожої атаки на Житомирщині аварійні знеструмлення. Графіки погодинних відключень електроенергії наразі не діють.", true)]
+        [InlineData("У Житомирській області застосовуються аварійні відключення.", true)]
+        [InlineData("За командою НЕК «Укренерго» застосовано ГАВ в Житомирській області", true)]
+        [InlineData("Графік надано за умови відсутності аварійних відключень або планових робіт", false)]
+        [InlineData("Нагадуємо: у разі аварійних відключень звертайтесь до кол-центру", false)]
+        [InlineData("Завтра графіки погодинних відключень не діятимуть", false)]
+        [InlineData("За командою НЕК «Укренерго» на Житомирщині діють графіки погодинних відключень.", false)]
+        public void RecognisesEmergencyPosts(string text, bool expected) =>
+            Assert.Equal(expected, EmergencyMonitor.IsEmergency(text));
+
+        [Fact]
+        public void RecognisesCancellation() =>
+            Assert.True(EmergencyMonitor.IsCancel("Аварійні відключення скасовано, повертаємось до графіків"));
+    }
+}
