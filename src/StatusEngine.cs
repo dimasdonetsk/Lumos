@@ -20,6 +20,8 @@ namespace Lumos
         public int? NextChange;
         /// <summary>Найближче майбутнє відключення, коли світло зараз є.</summary>
         public Interval? NextOutage;
+        /// <summary>Коли за графіком почався поточний стан (хвилини від сьогоднішньої півночі; від'ємні — вчора).</summary>
+        public int? CurrentStart;
     }
 
     internal static class StatusEngine
@@ -41,7 +43,7 @@ namespace Lumos
             return list;
         }
 
-        public static Status Compute(int[]? today, int[]? tomorrow, bool emergency, int nowMinutes)
+        public static Status Compute(int[]? today, int[]? tomorrow, int[]? yesterday, bool emergency, int nowMinutes)
         {
             var status = new Status();
             if (today == null)
@@ -55,6 +57,18 @@ namespace Lumos
             status.Kind = emergency ? StatusKind.Emergency : off ? StatusKind.Off : StatusKind.On;
 
             int[] all = tomorrow != null ? today.Concat(tomorrow).ToArray() : today;
+
+            // Від якого моменту триває поточний стан: назад по сьогоднішньому графіку, за потреби — по вчорашньому.
+            int k = nowIndex;
+            while (k > 0 && IsOff(today[k - 1]) == off) k--;
+            int start = k * 30;
+            if (k == 0 && yesterday != null)
+            {
+                int y = 48;
+                while (y > 0 && IsOff(yesterday[y - 1]) == off) y--;
+                start = (y - 48) * 30;
+            }
+            status.CurrentStart = start;
 
             int j = nowIndex + 1;
             while (j < all.Length && IsOff(all[j]) == off) j++;

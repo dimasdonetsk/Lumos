@@ -21,6 +21,8 @@ namespace Lumos
         public string Theme { get; set; } = "Dark";
         /// <summary>Коли людина позначила «у мене немає світла» (null — не позначено).</summary>
         public DateTime? ManualOffSince { get; set; }
+        /// <summary>Коли людина натиснула «Світло повернулося» — звідси рахується, скільки світло вже є.</summary>
+        public DateTime? LightBackAt { get; set; }
 
         public static string DataDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Lumos");

@@ -182,23 +182,25 @@ namespace Lumos
             int nowMinutes = now.Hour * 60 + now.Minute;
             string todayKey = now.ToString("yyyy-MM-dd");
             string tomorrowKey = now.AddDays(1).ToString("yyyy-MM-dd");
+            string yesterdayKey = now.AddDays(-1).ToString("yyyy-MM-dd");
 
             RegionData? region = CurrentRegion;
             string? queue = Settings.Queue;
             if (region != null && (queue == null || !region.Queues.ContainsKey(queue)))
                 queue = null;
 
-            int[]? today = null, tomorrow = null;
+            int[]? today = null, tomorrow = null, yesterday = null;
             if (region != null && queue != null && region.Queues.TryGetValue(queue, out var days))
             {
                 days.TryGetValue(todayKey, out today);
                 days.TryGetValue(tomorrowKey, out tomorrow);
+                days.TryGetValue(yesterdayKey, out yesterday);
             }
 
             bool needsSetup = region == null || queue == null;
             EmergencyInfo? tg = _tgRegion == Settings.RegionId ? _tgEmergency : null;
             bool emergency = (region?.Emergency ?? false) || tg != null;
-            Status status = needsSetup ? new Status() : StatusEngine.Compute(today, tomorrow, emergency, nowMinutes);
+            Status status = needsSetup ? new Status() : StatusEngine.Compute(today, tomorrow, yesterday, emergency, nowMinutes);
 
             // Ручна позначка «немає світла» сильніша за графік; сама знімається через 12 годин.
             if (Settings.ManualOffSince is DateTime since && now - since > TimeSpan.FromHours(12))
@@ -209,11 +211,29 @@ namespace Lumos
             if (Settings.ManualOffSince != null)
                 status.Kind = StatusKind.ManualOff;
 
+            // Скільки триває поточний стан: від початку за графіком, а якщо людина позначала,
+            // що світла не було, — від моменту, коли натиснула «Світло повернулося».
+            DateTime? since = null;
+            if (status.Kind == StatusKind.ManualOff)
+                since = Settings.ManualOffSince;
+            else if ((status.Kind == StatusKind.On || status.Kind == StatusKind.Off) && status.CurrentStart is int startMin)
+            {
+                since = now.Date.AddMinutes(startMin);
+                if (status.Kind == StatusKind.On && Settings.LightBackAt is DateTime back && back > since && back <= now)
+                    since = back;
+            }
+            // Позначка «світло повернулося» більше не потрібна, щойно за графіком світло зникло або минула доба.
+            if (Settings.LightBackAt is DateTime b2 && (status.Kind == StatusKind.Off || now - b2 > TimeSpan.FromHours(24)))
+            {
+                Settings.LightBackAt = null;
+                Settings.Save();
+            }
+
             IReadOnlyList<string> queues = region?.SortedQueues().ToList() ?? new List<string>();
             // Поки вікно закрите, малювати графік не треба: рахуємо лише статус для іконки й сповіщень.
             _vm.IsActive = _window != null;
             _vm.Apply(status, today, tomorrow, now, region?.Name ?? "", queue ?? "", queues, needsSetup,
-                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince);
+                      Snapshot?.FetchedAt ?? default, Snapshot?.FromCache ?? false, tg, Settings.ManualOffSince, since);
             _tray?.Update(status.Kind, _vm.TrayText);
 
             if (!needsSetup)
@@ -424,7 +444,16 @@ namespace Lumos
 
         public void ToggleManualOff()
         {
-            Settings.ManualOffSince = Settings.ManualOffSince == null ? StatusEngine.KyivNow() : null;
+            if (Settings.ManualOffSince == null)
+            {
+                Settings.ManualOffSince = StatusEngine.KyivNow();
+                Settings.LightBackAt = null;
+            }
+            else
+            {
+                Settings.ManualOffSince = null;
+                Settings.LightBackAt = StatusEngine.KyivNow();
+            }
             Settings.Save();
             Update();
         }

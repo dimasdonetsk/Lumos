@@ -77,6 +77,7 @@ namespace Lumos
         private DateTime _fetchedAt;
         private EmergencyInfo? _emergencyInfo;
         private DateTime? _manualSince;
+        private DateTime? _stateSince;
 
         // Стан вигляду
         private bool _showTomorrow;
@@ -157,9 +158,9 @@ namespace Lumos
 
         public void Apply(Status status, int[]? today, int[]? tomorrow, DateTime kyivNow, string regionName,
                           string queue, IReadOnlyList<string> queues, bool needsSetup, DateTime fetchedAt, bool fromCache,
-                          EmergencyInfo? emergencyInfo, DateTime? manualSince)
+                          EmergencyInfo? emergencyInfo, DateTime? manualSince, DateTime? stateSince)
         {
-            _emergencyInfo = emergencyInfo; _manualSince = manualSince;
+            _emergencyInfo = emergencyInfo; _manualSince = manualSince; _stateSince = stateSince;
             _status = status; _today = today; _tomorrow = tomorrow; _kyivNow = kyivNow;
             _regionName = regionName; _queue = queue; _queues = queues;
             _needsSetup = needsSetup; _fetchedAt = fetchedAt; _fromCache = fromCache;
@@ -182,15 +183,12 @@ namespace Lumos
             switch (_status.Kind)
             {
                 case StatusKind.ManualOff:
-                {
-                    int since = Math.Max(0, (int)(_kyivNow - _manualSince!.Value).TotalMinutes);
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconOff = true;
                     Title = "Світла немає";
-                    Detail = "Не за графіком · позначено о " + _manualSince.Value.ToString("HH:mm");
-                    BigText = StatusEngine.Clock(since); BigLabel = "без світла";
+                    Detail = "Не за графіком · позначено о " + _manualSince!.Value.ToString("HH:mm");
+                    SetElapsed("без світла");
                     TrayText = "Світла немає (не за графіком)";
                     break;
-                }
 
                 case StatusKind.Emergency:
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconAlert = true;
@@ -205,37 +203,33 @@ namespace Lumos
                 case StatusKind.Off:
                     StatusBrush = Theme.StatusYellow; TileBrush = Theme.TileYellow; IconOff = true;
                     Title = "Світла немає";
-                    Detail = "Планове відключення за графіком";
                     if (_status.NextChange is int onAt)
                     {
-                        BigText = StatusEngine.Clock(onAt - now);
-                        BigLabel = "до увімкнення о " + StatusEngine.Hm(onAt);
+                        Detail = "Увімкнуть о " + StatusEngine.Hm(onAt) + " · через " + StatusEngine.Duration(onAt - now);
                         TrayText = "Світла немає · увімкнуть о " + StatusEngine.Hm(onAt);
                     }
                     else
                     {
-                        BigText = ""; BigLabel = "";
+                        Detail = "Планове відключення за графіком";
                         TrayText = "Світла немає";
                     }
+                    SetElapsed("без світла");
                     break;
 
                 case StatusKind.On:
                     StatusBrush = Theme.StatusGreen; TileBrush = Theme.TileGreen; IconOn = true;
                     Title = "Світло є";
-                    Detail = _status.NextOutage is Interval o
-                        ? "Наступне відключення " + StatusEngine.Hm(o.Start) + "–" + StatusEngine.Hm(o.End)
-                        : "Відключень за графіком не видно";
-                    if (_status.NextChange is int offAt)
+                    if (_status.NextOutage is Interval o)
                     {
-                        BigText = StatusEngine.Clock(offAt - now);
-                        BigLabel = "до відключення о " + StatusEngine.Hm(offAt);
-                        TrayText = "Світло є · вимкнуть о " + StatusEngine.Hm(offAt);
+                        Detail = "Вимкнуть о " + StatusEngine.Hm(o.Start) + " · через " + StatusEngine.Duration(o.Start - now);
+                        TrayText = "Світло є · вимкнуть о " + StatusEngine.Hm(o.Start);
                     }
                     else
                     {
-                        BigText = ""; BigLabel = "";
+                        Detail = "Відключень за графіком не видно";
                         TrayText = "Світло є";
                     }
+                    SetElapsed("світло є");
                     break;
 
                 default:
@@ -422,6 +416,21 @@ namespace Lumos
             labels.Add(new TimeLabelVm { Left = 0, TextTop = 5, Text = "00", Brush = edge, Align = TextAlignment.Left, TickHeight = 0 });
             labels.Add(new TimeLabelVm { Left = W - LabelWidth, TextTop = 5, Text = "24", Brush = edge, Align = TextAlignment.Right, TickHeight = 0 });
             return labels;
+        }
+
+        /// <summary>Велике число — скільки вже триває поточний стан; підпис — з якого часу.</summary>
+        private void SetElapsed(string what)
+        {
+            if (_stateSince is not DateTime since)
+            {
+                BigText = ""; BigLabel = "";
+                return;
+            }
+            int minutes = Math.Max(0, (int)(_kyivNow - since).TotalMinutes);
+            BigText = StatusEngine.Clock(minutes);
+            string at = since.ToString("HH:mm");
+            if (since.Date < _kyivNow.Date) at = "вчора " + at;
+            BigLabel = what + " з " + at;
         }
 
         private static string Shorten(string text, int max) =>
