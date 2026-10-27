@@ -19,11 +19,14 @@ namespace Lumos
             _mutex = new Mutex(true, "Lumos.SingleInstance.v1", out bool createdNew);
             if (!createdNew)
             {
+                Log.Write("Already running, exit");
                 Shutdown();
                 return;
             }
 
             DispatcherUnhandledException += OnUnhandled;
+            AppDomain.CurrentDomain.UnhandledException += (_, ev) => Log.Write("Crash: " + ev.ExceptionObject);
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, ev) => { Log.Write("Task: " + ev.Exception.GetBaseException().Message); ev.SetObserved(); };
 
             _controller = new AppController();
             _controller.Start();

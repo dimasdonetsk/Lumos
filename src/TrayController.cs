@@ -160,7 +160,7 @@ namespace Lumos
                 Add(_menu.Items, Item("Підключити EcoFlow…", () => _app.OpenStationWindow()));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
-            Add(_menu.Items, Toggle("Запускати при вході", s.Autostart, v => _app.Change(x => x.Autostart = v)));
+            Add(_menu.Items, Toggle("Запускати при вході", s.Autostart && !AutostartHelper.DisabledByWindows(), v => _app.SetAutostart(v)));
             Add(_menu.Items, Toggle("Звук перед відключенням", s.Sound, v => _app.Change(x => x.Sound = v)));
             Add(_menu.Items, Toggle("Сповіщення перед відключенням", s.Notify, v => _app.Change(x => x.Notify = v)));
             Add(_menu.Items, Toggle("Сповіщати про новий графік", s.NotifyNewSchedule, v => _app.Change(x => x.NotifyNewSchedule = v)));

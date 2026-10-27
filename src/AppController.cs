@@ -71,6 +71,8 @@ namespace Lumos
             Settings = Settings.Load();
             Theme.Apply(Settings.Theme == "Light");
             AutostartHelper.Apply(Settings.Autostart);
+            Log.Write("Start " + Updater.CurrentVersion + (Environment.GetCommandLineArgs().Length > 1 ? " " + string.Join(" ", Environment.GetCommandLineArgs()[1..]) : "") +
+                      (Settings.Autostart && AutostartHelper.DisabledByWindows() ? " (autostart disabled in Task Manager)" : ""));
 
             _vm.QueuePicked += SetQueue;
             _vm.ManualToggled += ToggleManualOff;
@@ -629,8 +631,17 @@ namespace Lumos
             change(Settings);
             Settings.Save();
 
-            if (Settings.Autostart != oldAutostart) AutostartHelper.Apply(Settings.Autostart);
+            if (Settings.Autostart != oldAutostart) AutostartHelper.Apply(Settings.Autostart, userAction: true);
             if (Settings.Theme != oldTheme) Theme.Apply(Settings.Theme == "Light");
+            Update();
+        }
+
+        /// <summary>Пункт меню «Запускати при вході»: завжди перезаписує запис і знімає заборону Windows.</summary>
+        public void SetAutostart(bool enabled)
+        {
+            Settings.Autostart = enabled;
+            Settings.Save();
+            AutostartHelper.Apply(enabled, userAction: true);
             Update();
         }
 
