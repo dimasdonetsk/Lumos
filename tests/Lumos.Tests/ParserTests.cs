@@ -76,6 +76,20 @@ namespace Lumos.Tests
         public void RecognisesEmergencyPosts(string text, bool expected) =>
             Assert.Equal(expected, EmergencyMonitor.IsEmergency(text));
 
+        [Theory]
+        // Пост Житомиробленерго 3.11 о 14:50 про «3 листопада» — 4.11 вже не діє.
+        [InlineData("Увага! 3 листопада 2026 запроваджено аварійні відключення", "2026-11-03 14:50", "2026-11-04 00:00")]
+        // Без дати — до кінця дня поста.
+        [InlineData("Застосовуються аварійні відключення", "2026-11-03 09:10", "2026-11-04 00:00")]
+        // Пізно ввечері — щонайменше 6 годин.
+        [InlineData("Застосовуються аварійні відключення", "2026-11-03 22:30", "2026-11-04 04:30")]
+        // Нічний пост про наступний день — діє весь той день.
+        [InlineData("4 листопада застосовуватимуться аварійні відключення", "2026-11-03 23:40", "2026-11-05 00:00")]
+        // Історична дата в тексті ігнорується.
+        [InlineData("Як і 24 лютого, застосовано аварійні відключення", "2026-11-03 10:00", "2026-11-04 00:00")]
+        public void EmergencyExpiresWithItsDay(string text, string posted, string until) =>
+            Assert.Equal(DateTime.Parse(until), EmergencyMonitor.ValidUntil(text, DateTime.Parse(posted)));
+
         [Fact]
         public void PublishedScheduleIsNotEmergency()
         {

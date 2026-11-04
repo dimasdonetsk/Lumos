@@ -110,12 +110,18 @@ namespace Lumos
         public static DateTime KyivNow() =>
             KyivZone != null ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, KyivZone) : DateTime.Now;
 
+        public static DateTime ToKyiv(DateTimeOffset t) =>
+            KyivZone != null ? TimeZoneInfo.ConvertTime(t, KyivZone).DateTime : t.LocalDateTime;
+
         private static readonly TimeZoneInfo? KyivZone = FindKyivZone();
 
         private static TimeZoneInfo? FindKyivZone()
         {
-            try { return TimeZoneInfo.FindSystemTimeZoneById("FLE Standard Time"); }
-            catch { return null; }
+            // Windows і Linux (збирач на GitHub) називають пояс по-різному.
+            foreach (string id in new[] { "FLE Standard Time", "Europe/Kyiv", "Europe/Kiev" })
+                try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+                catch { }
+            return null;
         }
     }
 }

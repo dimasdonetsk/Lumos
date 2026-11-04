@@ -27,9 +27,37 @@ namespace Lumos
         private const string Dtek = "dtek_ua";
         private static readonly HashSet<string> DtekRegions = new()
             { "kyiv", "kiivska-oblast", "odeska-oblast", "dnipropetrovska-oblast", "dnipro-dnem", "donetska-oblast" };
-        // Аварійні оголошують раз і не повторюють, тож дивимося на добу назад:
-        // діють, доки не з'явиться пост про скасування або про повернення до графіків.
+        // Аварійні оголошують раз і часто не скасовують окремим постом. Тому пост діє до кінця дня,
+        // на який його опубліковано (або дати, названої в тексті: «3 листопада»), але щонайменше 6 годин —
+        // щоб нічний пост о 23:00 не згас опівночі. Наступного дня без нового поста — знову графік.
         private static readonly TimeSpan Window = TimeSpan.FromHours(24);
+        private static readonly TimeSpan MinValid = TimeSpan.FromHours(6);
+
+        private static readonly string[] Months =
+            { "січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня" };
+        private static readonly Regex DateRx = new(
+            @"\b(\d{1,2})\s+(" + string.Join("|", Months) + @")\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>До якого моменту (київський час) діє пост про аварійні.</summary>
+        internal static DateTime ValidUntil(string text, DateTime postedKyiv)
+        {
+            DateTime day = postedKyiv.Date;
+            Match m = DateRx.Match(text);
+            if (m.Success)
+            {
+                int month = Array.FindIndex(Months, x => x.Equals(m.Groups[2].Value, StringComparison.OrdinalIgnoreCase)) + 1;
+                int d = int.Parse(m.Groups[1].Value);
+                // Дата в межах кількох днів від поста (захист від «24 лютого» в історичних згадках).
+                for (int y = postedKyiv.Year - 1; y <= postedKyiv.Year + 1; y++)
+                    if (d >= 1 && d <= DateTime.DaysInMonth(y, month))
+                    {
+                        var named = new DateTime(y, month, d);
+                        if (Math.Abs((named - postedKyiv.Date).TotalDays) <= 2) { day = named; break; }
+                    }
+            }
+            DateTime end = day.AddDays(1);
+            return end < postedKyiv + MinValid ? postedKyiv + MinValid : end;
+        }
 
         // Канали обленерго. Їх пости стосуються лише своєї області, тож згадка області не потрібна.
         private static readonly Dictionary<string, string[]> RegionChannels = new()
@@ -181,7 +209,7 @@ namespace Lumos
             try
             {
                 string html = await PageAsync(channel).ConfigureAwait(false);
-                return Evaluate(ParsePosts(html), sourceName, mustMention, DateTime.Now);
+                return Evaluate(ParsePosts(html), sourceName, mustMention, StatusEngine.KyivNow());
             }
             catch (Exception ex) when (!strict)
             {
@@ -192,7 +220,8 @@ namespace Lumos
 
         private sealed class Post
         {
-            public DateTime Time;
+            public DateTime Time;   // місцевий час ПК (для показу)
+            public DateTime Kyiv;   // київський час (для правил)
             public string Text = "";
             public string Url = "";
         }
@@ -215,6 +244,7 @@ namespace Lumos
                 posts.Add(new Post
                 {
                     Time = when.LocalDateTime,
+                    Kyiv = StatusEngine.ToKyiv(when),
                     Text = plain,
                     Url = post.Success ? "https://t.me/" + post.Groups[1].Value : ""
                 });
@@ -225,9 +255,9 @@ namespace Lumos
         private static EmergencyInfo? Evaluate(List<Post> posts, string source, string[]? mustMention, DateTime now)
         {
             // Від найновішого: перший доречний пост вирішує — діють аварійні чи вже ні.
-            foreach (Post p in posts.OrderByDescending(p => p.Time))
+            foreach (Post p in posts.OrderByDescending(p => p.Kyiv))
             {
-                if (now - p.Time > Window) break;
+                if (now - p.Kyiv > Window) break;
                 if (mustMention != null && !Mentions(p.Text, mustMention)) continue;
 
                 if (CancelRx.IsMatch(p.Text)) return null;
@@ -238,7 +268,11 @@ namespace Lumos
                     return null;
                 }
                 if (IsEmergency(p.Text))
+                {
+                    // Старий пост, а нового немає — аварійні вже не вважаємо чинними.
+                    if (now >= ValidUntil(p.Text, p.Kyiv)) return null;
                     return new EmergencyInfo { Source = source, Time = p.Time, Text = p.Text, Url = p.Url };
+                }
                 // Звичайний пост про графіки на сьогодні означає, що аварійні вже позаду.
                 // Пости про завтра цього не означають: аварійні можуть ще тривати.
                 if (SchedulesBackRx.IsMatch(p.Text) && !p.Text.Contains("завтра", StringComparison.OrdinalIgnoreCase))
