@@ -52,6 +52,8 @@ namespace Lumos
         private string? _remindedFor;
         private int _notChargingPolls;
         private bool _lowWarned;
+        private int _noGridPolls;
+        private DateTime _nightOffSkipDay;
         private Status _lastStatus = new();
 
         public bool EcoConnected => Settings.EcoMode != null && !string.IsNullOrEmpty(Settings.EcoSn);
@@ -367,7 +369,76 @@ namespace Lumos
             }
             Update();
             CheckStation();
+            await NightAcAsync();
             ScheduleTrim();
+        }
+
+        public static Task SetAcAsync(Settings s, StationStatus last, bool enabled) => s.EcoMode == "Keys"
+            ? EcoFlow.SetAcByKeysAsync(s.EcoHost ?? EcoFlow.HostEu, s.EcoAccessKey ?? "", EcoFlow.Unprotect(s.EcoSecretEnc), s.EcoSn!, last, enabled)
+            : EcoFlow.SetAcByLoginAsync(s.EcoEmail ?? "", EcoFlow.Unprotect(s.EcoPasswordEnc), s.EcoSn!, last, enabled);
+
+        /// <summary>
+        /// Нічний режим: після обраної години, якщо від розетки нічого не йде (світла немає) — вимкнути 220 В,
+        /// щоб станція не сідала на зарядках і чайниках у режимі очікування. Коли світло повертається — ввімкнути назад.
+        /// Якщо людина сама ввімкнула 220 В вночі, до ранку більше не чіпаємо.
+        /// </summary>
+        private async Task NightAcAsync()
+        {
+            StationStatus? st = _station;
+            if (st == null || _stationError != null || st.AcEnabled == null) return;
+            DateTime now = StatusEngine.KyivNow();
+
+            // Світло повернулось — повертаємо розетки, якщо їх вимикали ми.
+            if (Settings.EcoAcOffByLumos)
+            {
+                if (st.AcEnabled == true) { Settings.EcoAcOffByLumos = false; Settings.Save(); _nightOffSkipDay = now.Date; return; }
+                if (st.GridPowered) await SwitchAcAsync(st, true, "Світло повернулось — розетки 220 В EcoFlow знову ввімкнені.");
+                return;
+            }
+
+            if (Settings.EcoNightOffHour is not int hour) return;
+            bool night = now.Hour >= hour && now.Hour < 7;
+            if (!night || st.AcEnabled != true || _nightOffSkipDay == now.Date) { _noGridPolls = 0; return; }
+            if (st.GridPowered) { _noGridPolls = 0; return; }
+            // Двічі поспіль без струму від розетки (~6 хв), щоб не реагувати на мить.
+            if (++_noGridPolls < 2) return;
+            _noGridPolls = 0;
+            await SwitchAcAsync(st, false, "Світла немає — вимкнула розетки 220 В EcoFlow о " + now.ToString("HH:mm") +
+                                           ". Увімкну, щойно повернеться світло.");
+        }
+
+        private async Task SwitchAcAsync(StationStatus st, bool enabled, string message)
+        {
+            try
+            {
+                await SetAcAsync(Settings, st, enabled);
+                Settings.EcoAcOffByLumos = !enabled;
+                Settings.Save();
+                Log.Write("EcoFlow AC " + (enabled ? "on" : "off"));
+                if (Settings.Notify) Send("EcoFlow", message);
+                // Перечитати стан через 20 с, щоб картка показала нове положення розеток.
+                _ = Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20));
+                    await PollStationAsync();
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Write("EcoFlow AC: " + ex.Message);
+                if (Settings.Notify) Send("EcoFlow", "Не вдалося " + (enabled ? "ввімкнути" : "вимкнути") + " 220 В: " +
+                                                     (ex is EcoFlow.EcoException ? ex.Message : "немає зв'язку з EcoFlow"));
+            }
+        }
+
+        /// <summary>Пункт меню: о котрій вимикати 220 В вночі (null — ніколи).</summary>
+        public void SetNightOff(int? hour)
+        {
+            Settings.EcoNightOffHour = hour;
+            Settings.Save();
+            _noGridPolls = 0;
+            _nightOffSkipDay = default;
+            Update();
         }
 
         /// <summary>Нагадування: світло є, а станція не заряджається; заряд закінчується без світла.</summary>

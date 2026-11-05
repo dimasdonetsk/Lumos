@@ -172,8 +172,9 @@ namespace Lumos.Tests
         {
             var json = System.Text.Json.JsonDocument.Parse(
                 "{\"pd.soc\":64,\"inv.inputWatts\":0,\"mppt.inWatts\":0,\"pd.wattsOutSum\":118," +
-                "\"bms_emsStatus.dsgRemainTime\":250,\"bms_emsStatus.chgRemainTime\":5999}").RootElement;
+                "\"bms_emsStatus.dsgRemainTime\":250,\"bms_emsStatus.chgRemainTime\":5999,\"mppt.cfgAcEnabled\":1}").RootElement;
             StationStatus st = EcoFlow.Parse(json);
+            Xunit.Assert.True(st.AcEnabled);
             Xunit.Assert.Equal(64, st.Soc);
             Xunit.Assert.Equal(118, st.OutW);
             Xunit.Assert.Equal(250, st.DischargeMin);
@@ -181,6 +182,18 @@ namespace Lumos.Tests
             Xunit.Assert.True(st.Discharging);
             Xunit.Assert.False(st.Charging);
             Xunit.Assert.False(st.GridPowered);
+        }
+
+        [Fact]
+        public void AcCommandFlattensForSignature()
+        {
+            var last = new StationStatus { Soc = 50, AcXboost = 1, AcOutVol = 230000, AcOutFreq = 1, AcEnabled = true };
+            var body = EcoFlow.AcCommand("R621ZAB5XG00000", last, false);
+            var flat = new System.Collections.Generic.Dictionary<string, string>(EcoFlow.Flatten(body));
+            Xunit.Assert.Equal("0", flat["params.enabled"]);
+            Xunit.Assert.Equal("230000", flat["params.out_voltage"]);
+            Xunit.Assert.Equal("5", flat["moduleType"]);
+            Xunit.Assert.Equal("acOutCfg", flat["operateType"]);
         }
 
         [Fact]

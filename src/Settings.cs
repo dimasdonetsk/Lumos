@@ -38,6 +38,10 @@ namespace Lumos
         public string? EcoName { get; set; }
         /// <summary>Нагадувати поставити станцію на зарядку, коли світло є, а вона не заряджається.</summary>
         public bool EcoRemind { get; set; } = true;
+        /// <summary>Вимикати розетки 220 В вночі, якщо світла немає: година початку (null — не вимикати).</summary>
+        public int? EcoNightOffHour { get; set; }
+        /// <summary>Розетки вимкнув саме Lumos — тоді він їх і ввімкне, коли повернеться світло.</summary>
+        public bool EcoAcOffByLumos { get; set; }
 
         public static string DataDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Lumos");

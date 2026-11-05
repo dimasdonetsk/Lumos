@@ -27,6 +27,13 @@ namespace Lumos
         public int? ChargeMin { get; init; }
         public DateTime At { get; init; } = DateTime.Now;
 
+        /// <summary>Чи ввімкнені розетки 220 В (null — станція не повідомила).</summary>
+        public bool? AcEnabled { get; init; }
+        // Поточні налаштування виходу 220 В: команда вмикання/вимикання мусить їх повторити.
+        public int AcXboost { get; init; } = 1;
+        public int AcOutVol { get; init; } = 230000;
+        public int AcOutFreq { get; init; } = 1;
+
         public int InW => AcInW + SolarW;
         public bool Charging => InW - OutW > 10 && Soc < 100;
         public bool Discharging => OutW > InW + 5;
@@ -150,6 +157,82 @@ namespace Lumos
                 new Dictionary<string, string> { ["sn"] = sn }).ConfigureAwait(false);
             return Parse(data);
         }
+
+        /// <summary>Тіло команди «розетки 220 В»: moduleType 5 (інвертор), operateType acOutCfg.</summary>
+        internal static Dictionary<string, object> AcCommand(string sn, StationStatus last, bool enabled) => new()
+        {
+            ["sn"] = sn,
+            ["id"] = RandomNumberGenerator.GetInt32(100000, 999999),
+            ["version"] = "1.0",
+            ["moduleType"] = 5,
+            ["operateType"] = "acOutCfg",
+            ["params"] = new Dictionary<string, object>
+            {
+                ["enabled"] = enabled ? 1 : 0,
+                ["xboost"] = last.AcXboost,
+                ["out_voltage"] = last.AcOutVol,
+                ["out_freq"] = last.AcOutFreq,
+            },
+        };
+
+        /// <summary>Вкладені поля для підпису: params.enabled=0 і т.д.</summary>
+        internal static IEnumerable<KeyValuePair<string, string>> Flatten(Dictionary<string, object> body, string prefix = "")
+        {
+            foreach (var (k, v) in body)
+            {
+                string key = prefix + k;
+                if (v is Dictionary<string, object> inner)
+                    foreach (var kv in Flatten(inner, key + ".")) yield return kv;
+                else
+                    yield return new(key, Convert.ToString(v, CultureInfo.InvariantCulture) ?? "");
+            }
+        }
+
+        public static async Task SetAcByKeysAsync(string host, string accessKey, string secretKey, string sn, StationStatus last, bool enabled)
+        {
+            Dictionary<string, object> body = AcCommand(sn, last, enabled);
+            string nonce = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
+            using var request = new HttpRequestMessage(HttpMethod.Put, host + "/iot-open/sign/device/quota")
+            { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
+            request.Headers.TryAddWithoutValidation("accessKey", accessKey);
+            request.Headers.TryAddWithoutValidation("nonce", nonce);
+            request.Headers.TryAddWithoutValidation("timestamp", timestamp);
+            request.Headers.TryAddWithoutValidation("sign", Sign(secretKey, accessKey, nonce, timestamp, Flatten(body)));
+            using HttpResponseMessage response = await Http.SendAsync(request).ConfigureAwait(false);
+            CheckEnvelope(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        }
+
+        public static async Task SetAcByLoginAsync(string email, string password, string sn, StationStatus last, bool enabled)
+        {
+            Session s = await LoginAsync(email, password).ConfigureAwait(false);
+            Dictionary<string, object> body = AcCommand(sn, last, enabled);
+            body.Remove("sn");
+            body["from"] = "Lumos";
+            var factory = new MqttFactory();
+            using IMqttClient client = factory.CreateMqttClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            await client.ConnectAsync(MqttOptions(s), cts.Token).ConfigureAwait(false);
+            try
+            {
+                await client.PublishAsync(new MqttApplicationMessageBuilder()
+                    .WithTopic("/app/" + s.UserId + "/" + sn + "/thing/property/set").WithPayload(JsonSerializer.Serialize(body))
+                    .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce).Build(), cts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                try { await client.DisconnectAsync().ConfigureAwait(false); } catch { }
+            }
+        }
+
+        private static MqttClientOptions MqttOptions(Session s) => new MqttClientOptionsBuilder()
+            .WithTcpServer(s.MqttHost, s.MqttPort)
+            .WithCredentials(s.MqttUser, s.MqttPassword)
+            .WithClientId("ANDROID_" + Guid.NewGuid().ToString("N").ToUpperInvariant() + "_" + s.UserId)
+            .WithTlsOptions(o => o.UseTls())
+            .WithCleanSession()
+            .WithTimeout(TimeSpan.FromSeconds(15))
+            .Build();
 
         // ───────────────────────────── логін застосунку ─────────────────────────────
 
@@ -292,6 +375,10 @@ namespace Lumos
                 DischargeMin = Valid(dsg),
                 ChargeMin = Valid(chg),
                 At = DateTime.Now,
+                AcEnabled = Num(q, "mppt.cfgAcEnabled") is int ac ? ac == 1 : null,
+                AcXboost = Num(q, "mppt.cfgAcXboost") ?? 1,
+                AcOutVol = Num(q, "mppt.cfgAcOutVol") is int v && v > 0 ? v : 230000,
+                AcOutFreq = Num(q, "mppt.cfgAcOutFreq") is int f && f > 0 ? f : 1,
             };
         }
 

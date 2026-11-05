@@ -152,6 +152,13 @@ namespace Lumos
                     : " · немає даних")));
                 eco.DropDownItems.Add(new WF.ToolStripSeparator());
                 eco.DropDownItems.Add(Toggle("Нагадувати поставити на зарядку", s.EcoRemind, v => _app.Change(x => x.EcoRemind = v)));
+                var night = Sub("Вимикати 220 В вночі без світла" + (s.EcoNightOffHour is int nh ? "   ·  з " + nh.ToString("00") + ":00" : ""));
+                night.DropDownItems.Add(Radio("Ні", s.EcoNightOffHour == null, () => _app.SetNightOff(null)));
+                foreach (int h in new[] { 0, 1, 2, 3 })
+                    night.DropDownItems.Add(Radio("Після " + h.ToString("00") + ":00", s.EcoNightOffHour == h, () => _app.SetNightOff(h)));
+                night.DropDownItems.Add(new WF.ToolStripSeparator());
+                night.DropDownItems.Add(Info("Увімкне назад, щойно повернеться світло"));
+                eco.DropDownItems.Add(night);
                 eco.DropDownItems.Add(Item("Налаштувати…", () => _app.OpenStationWindow()));
                 eco.DropDownItems.Add(Item("Відключити", () => _app.DisconnectStation()));
                 Add(_menu.Items, eco);

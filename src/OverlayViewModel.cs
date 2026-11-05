@@ -347,6 +347,7 @@ namespace Lumos
             StationCharging = st.Charging;
 
             StationTitle = st.Title;
+            if (st.AcEnabled == false) StationTitle += " · 220 В вимкнено";
 
             bool lightOn = _status.Kind is StatusKind.On or StatusKind.ManualOn;
             string hint;
