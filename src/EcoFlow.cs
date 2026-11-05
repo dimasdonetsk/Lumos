@@ -32,6 +32,15 @@ namespace Lumos
         public bool Discharging => OutW > InW + 5;
         /// <summary>Від розетки йде струм — отже світло є (якщо станція в розетці).</summary>
         public bool GridPowered => AcInW > 5;
+
+        /// <summary>Підпис у картці: що станція робить зараз.</summary>
+        public string Title =>
+            Charging ? "Заряджається · " + InW + " Вт" + (SolarW > AcInW ? " від сонця" : "")
+            : Discharging ? "Віддає " + OutW + " Вт"
+            // Струм іде крізь станцію (вхід ≈ вихід): навантаження живить розетка чи сонце, батарея відпочиває.
+            : OutW > 5 ? "Навантаження " + OutW + " Вт · " + (SolarW > AcInW ? "від сонця" : "від мережі")
+            : GridPowered ? "Заряджена, від мережі"
+            : "Очікує · навантаження немає";
     }
 
     /// <summary>

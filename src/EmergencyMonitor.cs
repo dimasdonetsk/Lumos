@@ -82,6 +82,33 @@ namespace Lumos
             ["kirovohradska-oblast"] = new[] { "SvitloKropyvnytskyiMisto" },
         };
 
+        // Як підписувати канали в картці: «Житомиробленерго», а не «ztoe_ua».
+        private static readonly Dictionary<string, string> ChannelNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ztoe_ua"] = "Житомиробленерго",
+            ["lvivoblenergo"] = "Львівобленерго",
+            ["poltavaoe"] = "Полтаваобленерго",
+            ["pat_cherkasyoblenergo"] = "Черкасиобленерго",
+            ["chernigivoblenergo"] = "Чернігівобленерго",
+            ["kharkivenergy"] = "Харківобленерго",
+            ["khmelnytskoblenergo"] = "Хмельницькобленерго",
+            ["prykarpattyaoblenergo_official"] = "Прикарпаттяобленерго",
+            ["rivneoblenergo"] = "Рівнеобленерго",
+            ["ternopiloblenerho"] = "Тернопільобленерго",
+            ["zakarpatenergyofficial"] = "Закарпаттяобленерго",
+            ["Zaporizhzhyaoblenergo_news"] = "Запоріжжяобленерго",
+            ["oe_cv_ua"] = "Чернівціобленерго",
+            ["energy_volyn_official"] = "Волиньобленерго",
+            ["mk_energy_ua"] = "Миколаївобленерго",
+            ["SumyEnergo"] = "Сумиобленерго",
+            ["cek_info"] = "ЦЕК",
+            ["SvitloKropyvnytskyiMisto"] = "Світло Кропивницький",
+        };
+
+        /// <summary>Назва джерела для показу. У даних (і в data.json збирача) лежить назва каналу.</summary>
+        public static string SourceName(string source) =>
+            ChannelNames.TryGetValue(source, out string? name) ? name : source;
+
         // Як область згадується в тексті (з великої літери, щоб не ловити випадкові збіги).
         private static readonly Dictionary<string, string[]> RegionStems = new()
         {
@@ -238,8 +265,10 @@ namespace Lumos
                 if (!text.Success || !time.Success) continue;
                 if (!DateTimeOffset.TryParse(time.Groups[1].Value, out DateTimeOffset when)) continue;
 
-                string plain = WebUtility.HtmlDecode(TagRx.Replace(text.Groups[1].Value, " "));
-                plain = Regex.Replace(plain, @"\s+", " ").Trim();
+                // Переноси рядків лишаємо: по них Summary відділяє заголовок, дату й головне речення.
+                string plain = WebUtility.HtmlDecode(TagRx.Replace(text.Groups[1].Value,
+                    m => m.Value.StartsWith("<br", StringComparison.OrdinalIgnoreCase) ? "\n" : " "));
+                plain = Regex.Replace(Regex.Replace(plain, @"[^\S\n]+", " "), @" ?\n[\s]*", "\n").Trim();
                 Match post = PostRx.Match(chunk);
                 posts.Add(new Post
                 {
@@ -307,6 +336,51 @@ namespace Lumos
         }
 
         internal static bool IsCancel(string text) => CancelRx.IsMatch(text);
+
+        // Емодзі й піктограми (№, °, ©, ®, ™ лишаємо). Ними в постах часто розділені фрази, тож це межа фрази.
+        private static readonly Regex PictoRx = new(@"[\p{So}\p{Cs}︎️‍⃣‼⁉-[№°©®™]]+",
+            RegexOptions.CultureInvariant);
+        // Межі фраз: кінець речення (крім «м.», «вул.» тощо), перенос рядка, «Нагадаємо:» і подібні вставки.
+        private static readonly Regex PhraseSplitRx = new(
+            @"(?<!(?:^|[\s(«])(?:м|с|смт|вул|обл|просп|пров|буд|ім)\.)(?<=[.!?…])\s+|\n" +
+            @"|\s+(?=(?:Нагадаємо|Нагадуємо|Зверніть увагу|Звертаємо увагу|Просимо|Важливо|Детальніше|Слідкуйте|Стежте)\b)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly (Regex Rx, string To)[] Tidy =
+        {
+            (new(@"\s*\((?:ГАВ|ГПВ|САВ|ГВП)\)", RegexOptions.CultureInvariant), ""),
+            // «За розпорядженням НЕК «Укренерго» на Житомирщині…» → «На Житомирщині…»: хто наказав, людині не важливо.
+            (new(@"^(?:За|Згідно\s+з|Відповідно\s+до)\s+(?:команд|розпорядженн|рішенн|вказівк)\w*\s+(?:НЕК\s+)?«?Укренерго»?,?\s*",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), ""),
+            (new(@"НЕК\s+«Укренерго»", RegexOptions.CultureInvariant), "Укренерго"),
+            (new(@"((?:відключен|вимкнен|знеструмлен)\w*)\s+електро(?:енергії|постачання)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), "$1"),
+        };
+
+        /// <summary>
+        /// Головне з поста одним реченням: без емодзі, «Увага!», дати й канцеляриту.
+        /// «❗ Увага! … 🔌 За розпорядженням Укренерго на Житомирщині знову запроваджено аварійні відключення
+        /// електроенергії (ГАВ) …» → «На Житомирщині знову запроваджено аварійні відключення.»
+        /// </summary>
+        internal static string Summary(string text, int max = 110)
+        {
+            string[] phrases = PhraseSplitRx.Split(PictoRx.Replace(text, "\n"))
+                .Select(p => Regex.Replace(p, @"\s+", " ").Trim(' ', '-', '–', '—', '•', '·', '*', ':', ','))
+                .Where(p => p.Length > 0)
+                .ToArray();
+            // Короткі фрази — це заголовки («Аварійні відключення!») і дати, вони нічого не додають.
+            string? pick = phrases.FirstOrDefault(p => p.Length >= 25 && IsEmergency(p))
+                        ?? phrases.FirstOrDefault(p => p.Length >= 25)
+                        ?? phrases.FirstOrDefault();
+            if (pick == null) return "";
+
+            foreach (var (rx, to) in Tidy) pick = rx.Replace(pick, to);
+            pick = Regex.Replace(pick, @"\s+", " ").Trim().TrimEnd('.', ',', ';', ':', '!', '-', '–', '—', ' ');
+            if (pick.Length == 0) return "";
+            pick = char.ToUpper(pick[0], System.Globalization.CultureInfo.GetCultureInfo("uk-UA")) + pick.Substring(1);
+
+            if (pick.Length + 1 <= max) return pick + ".";
+            int cut = pick.LastIndexOf(' ', max - 1);
+            return pick.Substring(0, cut > max / 2 ? cut : max - 1).TrimEnd('.', ',', ';', ':', '-', '–', '—', ' ') + "…";
+        }
 
         private static bool Mentions(string text, string[] stems) =>
             stems.Any(s => text.Contains(s, StringComparison.Ordinal)) ||

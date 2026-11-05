@@ -234,15 +234,25 @@
 
                 <!-- ГРАФІК -->
                 <StackPanel Margin="18,14,18,6">
-                    <Border Margin="0,0,0,14" Padding="12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
+                    <!-- Аварійні: одне речення з поста й посилання одразу за ним -->
+                    <Border Margin="0,0,0,14" Padding="12,9,12,10" CornerRadius="10" Background="{DynamicResource AlertBg}"
                             Visibility="{Binding IsEmergency, Converter={StaticResource Vis}}">
-                        <StackPanel>
-                            <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource AlertFg}" Text="{Binding EmergencyBanner}"/>
-                            <Button Style="{StaticResource Flat}" Command="{Binding OpenPostCommand}" Margin="0,6,0,0" HorizontalAlignment="Left"
-                                    Visibility="{Binding HasEmergencyPost, Converter={StaticResource Vis}}">
-                                <TextBlock Text="Відкрити повідомлення →" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource AlertFg}"/>
-                            </Button>
-                        </StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontSize="13" LineStackingStrategy="BlockLineHeight" LineHeight="18"
+                                   Foreground="{DynamicResource AlertFg}"><Run Text="{Binding EmergencyBanner, Mode=OneWay}"/>
+                            <Hyperlink Command="{Binding OpenPostCommand}" ToolTip="Відкрити пост у Telegram" FontWeight="SemiBold">
+                                <Hyperlink.Style>
+                                    <Style TargetType="Hyperlink">
+                                        <Setter Property="Foreground" Value="{DynamicResource AlertFg}"/>
+                                        <Setter Property="TextDecorations" Value="{x:Null}"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Focusable" Value="False"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="TextDecorations" Value="Underline"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Hyperlink.Style><Run Text="{Binding EmergencyLink, Mode=OneWay}"/></Hyperlink></TextBlock>
                     </Border>
 
                     <!-- Перемикач «Сьогодні / Завтра» -->

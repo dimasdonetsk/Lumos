@@ -302,7 +302,7 @@ namespace Lumos
             {
                 EmergencyInfo? info = _tgRegion == region.Id ? _tgEmergency : null;
                 string text = info != null
-                    ? info.Source + ": " + (info.Text.Length > 180 ? info.Text.Substring(0, 180) + "…" : info.Text)
+                    ? EmergencyMonitor.SourceName(info.Source) + ": " + EmergencyMonitor.Summary(info.Text, 160)
                     : region.Name + ": графік зараз не діє, світло можуть вимкнути будь-коли.";
                 Send("Аварійні відключення", text);
             }

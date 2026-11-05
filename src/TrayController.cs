@@ -85,7 +85,7 @@ namespace Lumos
             Add(_menu.Items, Item("Оновити зараз", () => _app.RefreshNow()));
             EmergencyInfo? em = _app.TelegramEmergency;
             if (em != null && em.Url.Length > 0)
-                Add(_menu.Items, Item("Аварійні: відкрити повідомлення " + em.Source, () => _app.OpenUrl(em.Url)));
+                Add(_menu.Items, Item("Аварійні: відкрити пост " + EmergencyMonitor.SourceName(em.Source), () => _app.OpenUrl(em.Url)));
             _menu.Items.Add(new WF.ToolStripSeparator());
 
             bool uz = _app.IsUzProvider;

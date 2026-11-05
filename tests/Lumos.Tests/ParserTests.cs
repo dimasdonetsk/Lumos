@@ -104,6 +104,51 @@ namespace Lumos.Tests
         [Fact]
         public void RecognisesCancellation() =>
             Assert.True(EmergencyMonitor.IsCancel("Аварійні відключення скасовано, повертаємось до графіків"));
+
+        // Пост Житомиробленерго 5.11.2026: у data.json збирача він без переносів, у свіжому парсері — з ними.
+        [Theory]
+        [InlineData("❗️ Увага! Аварійні відключення! \U0001F4C5 5 листопада 2026 \U0001F50C За розпорядженням Укренерго на Житомирщині " +
+                    "знову запроваджено аварійні відключення електроенергії (ГАВ) Нагадаємо: ГАВ діє до окремого розпорядження НЕК «Укренерго». " +
+                    "\U0001F4CC З метою безпеки заздалегідь зарядіть пристрої.")]
+        [InlineData("❗️ Увага! Аварійні відключення!\n\U0001F4C5 5 листопада 2026\n\U0001F50C За розпорядженням Укренерго на Житомирщині " +
+                    "знову запроваджено аварійні відключення електроенергії (ГАВ)\nНагадаємо: ГАВ діє до окремого розпорядження НЕК «Укренерго».")]
+        public void SummaryKeepsOnlyTheMainSentence(string post) =>
+            Assert.Equal("На Житомирщині знову запроваджено аварійні відключення.", EmergencyMonitor.Summary(post));
+
+        [Fact]
+        public void SummaryDoesNotSplitAbbreviations() =>
+            Assert.Equal("У м. Житомир застосовуються аварійні відключення.",
+                EmergencyMonitor.Summary("Увага! У м. Житомир застосовуються аварійні відключення. Дякуємо за розуміння!"));
+
+        [Fact]
+        public void SummaryIsShortened()
+        {
+            string s = EmergencyMonitor.Summary("Внаслідок ворожої атаки на енергетичну інфраструктуру в Житомирській, Київській, " +
+                "Чернігівській, Сумській, Полтавській і Харківській областях застосовуються аварійні відключення", 80);
+            Assert.True(s.Length <= 80, s);
+            Assert.EndsWith("…", s);
+        }
+
+        [Theory]
+        [InlineData("ztoe_ua", "Житомиробленерго")]
+        [InlineData("Укренерго", "Укренерго")]
+        [InlineData("невідомий_канал", "невідомий_канал")]
+        public void ChannelsHaveHumanNames(string source, string expected) =>
+            Assert.Equal(expected, EmergencyMonitor.SourceName(source));
+    }
+
+    public class StationTitleTests
+    {
+        [Theory]
+        // Станція в розетці пропускає струм крізь себе: вхід ≈ вихід. Раніше тут писало «навантаження немає».
+        [InlineData(99, 62, 0, 55, "Навантаження 55 Вт · від мережі")]
+        [InlineData(100, 3, 120, 110, "Навантаження 110 Вт · від сонця")]
+        [InlineData(100, 8, 0, 0, "Заряджена, від мережі")]
+        [InlineData(80, 0, 0, 0, "Очікує · навантаження немає")]
+        [InlineData(60, 300, 0, 40, "Заряджається · 300 Вт")]
+        [InlineData(60, 0, 0, 90, "Віддає 90 Вт")]
+        public void DescribesWhatStationDoes(int soc, int ac, int solar, int output, string expected) =>
+            Assert.Equal(expected, new StationStatus { Soc = soc, AcInW = ac, SolarW = solar, OutW = output }.Title);
     }
 }
 

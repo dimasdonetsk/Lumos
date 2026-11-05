@@ -134,6 +134,8 @@ namespace Lumos
         public string ManualButtonText => ShowsLight ? "Вимкнули" : "Увімкнули";
         public string EmergencyBanner { get; private set; } = "";
         public bool HasEmergencyPost => _emergencyInfo != null && _emergencyInfo.Url.Length > 0;
+        /// <summary>Посилання в кінці тексту банера; порожнє, коли поста немає.</summary>
+        public string EmergencyLink => HasEmergencyPost ? Keep("Відкрити →") : "";
 
         public ICommand CollapseCommand { get; }
         public ICommand TodayCommand { get; }
@@ -248,7 +250,7 @@ namespace Lumos
                     StatusBrush = Theme.StatusRed; TileBrush = Theme.TileRed; IconAlert = true;
                     Title = "Аварійне відключення";
                     Detail = _emergencyInfo != null
-                        ? _emergencyInfo.Source + " · " + _emergencyInfo.Time.ToString("HH:mm")
+                        ? EmergencyMonitor.SourceName(_emergencyInfo.Source) + " · " + _emergencyInfo.Time.ToString("HH:mm")
                         : "Графік не діє, стежимо за оновленнями";
                     // Скільки вже тривають аварійні — від часу повідомлення; без нього число не показуємо.
                     if (_emergencyInfo != null)
@@ -312,9 +314,9 @@ namespace Lumos
                 ? (_regionName.Length > 0 ? _regionName + " · " : "Lumos · ") + updated
                 : _regionName + " · " + updated + (_fromCache ? " · офлайн" : "");
 
-            EmergencyBanner = _emergencyInfo != null
-                ? _emergencyInfo.Source + ", " + _emergencyInfo.Time.ToString("HH:mm") + ": " + Shorten(_emergencyInfo.Text, 240)
-                : "Діють аварійні відключення. Графік нижче зараз не діє: світло можуть вимкнути будь-коли.";
+            // Джерело й час уже є під заголовком, тут — лише суть поста.
+            string summary = _emergencyInfo != null ? EmergencyMonitor.Summary(_emergencyInfo.Text) : "";
+            EmergencyBanner = summary.Length > 0 ? summary : "Графік нижче зараз не діє: світло можуть вимкнути будь-коли.";
 
             if (!IsActive) return;
             RenderStation(now);
@@ -344,12 +346,7 @@ namespace Lumos
             StationBrush = st.Soc <= 20 ? Theme.StatusRed : st.Soc <= 50 ? Theme.StatusYellow : Theme.StatusGreen;
             StationCharging = st.Charging;
 
-            if (st.Charging)
-                StationTitle = "Заряджається · " + st.InW + " Вт" + (st.SolarW > st.AcInW ? " від сонця" : "");
-            else if (st.Discharging)
-                StationTitle = "Віддає " + st.OutW + " Вт";
-            else
-                StationTitle = st.Soc >= 100 && st.GridPowered ? "Заряджена, від мережі" : "Очікує · навантаження немає";
+            StationTitle = st.Title;
 
             bool lightOn = _status.Kind is StatusKind.On or StatusKind.ManualOn;
             string hint;
@@ -583,9 +580,6 @@ namespace Lumos
 
         /// <summary>Нерозривні пробіли: фраза переноситься лише цілою («через 1 год 30 хв»), а не посередині.</summary>
         private static string Keep(string phrase) => phrase.Replace(' ', '\u00A0');
-
-        private static string Shorten(string text, int max) =>
-            text.Length <= max ? text : text.Substring(0, max).TrimEnd() + "…";
 
         private void RenderQueues()
         {
