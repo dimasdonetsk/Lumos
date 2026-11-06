@@ -404,7 +404,7 @@ namespace Lumos
             if (++_noGridPolls < 2) return;
             _noGridPolls = 0;
             await SwitchAcAsync(st, false, "Світла немає — вимкнула розетки 220 В EcoFlow о " + now.ToString("HH:mm") +
-                                           ". Увімкну, щойно повернеться світло.");
+                                           ". Якщо роутер живиться від станції, ввімкни 220 В кнопкою AC, коли з'явиться світло.");
         }
 
         private async Task SwitchAcAsync(StationStatus st, bool enabled, string message)

@@ -157,7 +157,7 @@ namespace Lumos
                 foreach (int h in new[] { 0, 1, 2, 3 })
                     night.DropDownItems.Add(Radio("Після " + h.ToString("00") + ":00", s.EcoNightOffHour == h, () => _app.SetNightOff(h)));
                 night.DropDownItems.Add(new WF.ToolStripSeparator());
-                night.DropDownItems.Add(Info("Увімкне назад, щойно повернеться світло"));
+                night.DropDownItems.Add(Info("Назад увімкне сам, якщо роутер не на 220 В станції"));
                 eco.DropDownItems.Add(night);
                 eco.DropDownItems.Add(Item("Налаштувати…", () => _app.OpenStationWindow()));
                 eco.DropDownItems.Add(Item("Відключити", () => _app.DisconnectStation()));
