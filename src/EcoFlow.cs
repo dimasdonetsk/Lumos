@@ -29,10 +29,6 @@ namespace Lumos
 
         /// <summary>Чи ввімкнені розетки 220 В (null — станція не повідомила).</summary>
         public bool? AcEnabled { get; init; }
-        // Поточні налаштування виходу 220 В: команда вмикання/вимикання мусить їх повторити.
-        public int AcXboost { get; init; } = 1;
-        public int AcOutVol { get; init; } = 230000;
-        public int AcOutFreq { get; init; } = 1;
 
         public int InW => AcInW + SolarW;
         public bool Charging => InW - OutW > 10 && Soc < 100;
@@ -158,8 +154,12 @@ namespace Lumos
             return Parse(data);
         }
 
-        /// <summary>Тіло команди «розетки 220 В»: moduleType 5 (інвертор), operateType acOutCfg.</summary>
-        internal static Dictionary<string, object> AcCommand(string sn, StationStatus last, bool enabled) => new()
+        /// <summary>
+        /// Тіло команди «розетки 220 В»: moduleType 5 (інвертор), operateType acOutCfg. Змінює лише enabled;
+        /// 255 і 4294967295 — «не змінювати» X-Boost, напругу й частоту (формат ioBroker.ecoflow-mqtt для River 2 Pro).
+        /// Поточні значення станції не повторюємо: через ключі вона віддає частоту в Гц (50), а команда чекає 1/2.
+        /// </summary>
+        internal static Dictionary<string, object> AcCommand(string sn, bool enabled) => new()
         {
             ["sn"] = sn,
             ["id"] = RandomNumberGenerator.GetInt32(100000, 999999),
@@ -169,9 +169,9 @@ namespace Lumos
             ["params"] = new Dictionary<string, object>
             {
                 ["enabled"] = enabled ? 1 : 0,
-                ["xboost"] = last.AcXboost,
-                ["out_voltage"] = last.AcOutVol,
-                ["out_freq"] = last.AcOutFreq,
+                ["xboost"] = 255,
+                ["out_voltage"] = 4294967295L,
+                ["out_freq"] = 255,
             },
         };
 
@@ -188,9 +188,9 @@ namespace Lumos
             }
         }
 
-        public static async Task SetAcByKeysAsync(string host, string accessKey, string secretKey, string sn, StationStatus last, bool enabled)
+        public static async Task SetAcByKeysAsync(string host, string accessKey, string secretKey, string sn, bool enabled)
         {
-            Dictionary<string, object> body = AcCommand(sn, last, enabled);
+            Dictionary<string, object> body = AcCommand(sn, enabled);
             string nonce = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
             string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
             using var request = new HttpRequestMessage(HttpMethod.Put, host + "/iot-open/sign/device/quota")
@@ -203,10 +203,10 @@ namespace Lumos
             CheckEnvelope(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
         }
 
-        public static async Task SetAcByLoginAsync(string email, string password, string sn, StationStatus last, bool enabled)
+        public static async Task SetAcByLoginAsync(string email, string password, string sn, bool enabled)
         {
             Session s = await LoginAsync(email, password).ConfigureAwait(false);
-            Dictionary<string, object> body = AcCommand(sn, last, enabled);
+            Dictionary<string, object> body = AcCommand(sn, enabled);
             body.Remove("sn");
             body["from"] = "Lumos";
             var factory = new MqttFactory();
@@ -376,9 +376,6 @@ namespace Lumos
                 ChargeMin = Valid(chg),
                 At = DateTime.Now,
                 AcEnabled = Num(q, "mppt.cfgAcEnabled") is int ac ? ac == 1 : null,
-                AcXboost = Num(q, "mppt.cfgAcXboost") ?? 1,
-                AcOutVol = Num(q, "mppt.cfgAcOutVol") is int v && v > 0 ? v : 230000,
-                AcOutFreq = Num(q, "mppt.cfgAcOutFreq") is int f && f > 0 ? f : 1,
             };
         }
 

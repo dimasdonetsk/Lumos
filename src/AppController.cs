@@ -373,9 +373,9 @@ namespace Lumos
             ScheduleTrim();
         }
 
-        public static Task SetAcAsync(Settings s, StationStatus last, bool enabled) => s.EcoMode == "Keys"
-            ? EcoFlow.SetAcByKeysAsync(s.EcoHost ?? EcoFlow.HostEu, s.EcoAccessKey ?? "", EcoFlow.Unprotect(s.EcoSecretEnc), s.EcoSn!, last, enabled)
-            : EcoFlow.SetAcByLoginAsync(s.EcoEmail ?? "", EcoFlow.Unprotect(s.EcoPasswordEnc), s.EcoSn!, last, enabled);
+        public static Task SetAcAsync(Settings s, bool enabled) => s.EcoMode == "Keys"
+            ? EcoFlow.SetAcByKeysAsync(s.EcoHost ?? EcoFlow.HostEu, s.EcoAccessKey ?? "", EcoFlow.Unprotect(s.EcoSecretEnc), s.EcoSn!, enabled)
+            : EcoFlow.SetAcByLoginAsync(s.EcoEmail ?? "", EcoFlow.Unprotect(s.EcoPasswordEnc), s.EcoSn!, enabled);
 
         /// <summary>
         /// Нічний режим: після обраної години, якщо від розетки нічого не йде (світла немає) — вимкнути 220 В,
@@ -392,7 +392,7 @@ namespace Lumos
             if (Settings.EcoAcOffByLumos)
             {
                 if (st.AcEnabled == true) { Settings.EcoAcOffByLumos = false; Settings.Save(); _nightOffSkipDay = now.Date; return; }
-                if (st.GridPowered) await SwitchAcAsync(st, true, "Світло повернулось — розетки 220 В EcoFlow знову ввімкнені.");
+                if (st.GridPowered) await SwitchAcAsync(true, "Світло повернулось — розетки 220 В EcoFlow знову ввімкнені.");
                 return;
             }
 
@@ -403,15 +403,15 @@ namespace Lumos
             // Двічі поспіль без струму від розетки (~6 хв), щоб не реагувати на мить.
             if (++_noGridPolls < 2) return;
             _noGridPolls = 0;
-            await SwitchAcAsync(st, false, "Світла немає — вимкнула розетки 220 В EcoFlow о " + now.ToString("HH:mm") +
+            await SwitchAcAsync(false, "Світла немає — вимкнула розетки 220 В EcoFlow о " + now.ToString("HH:mm") +
                                            ". Якщо роутер живиться від станції, ввімкни 220 В кнопкою AC, коли з'явиться світло.");
         }
 
-        private async Task SwitchAcAsync(StationStatus st, bool enabled, string message)
+        private async Task SwitchAcAsync(bool enabled, string message)
         {
             try
             {
-                await SetAcAsync(Settings, st, enabled);
+                await SetAcAsync(Settings, enabled);
                 Settings.EcoAcOffByLumos = !enabled;
                 Settings.Save();
                 Log.Write("EcoFlow AC " + (enabled ? "on" : "off"));

@@ -187,13 +187,25 @@ namespace Lumos.Tests
         [Fact]
         public void AcCommandFlattensForSignature()
         {
-            var last = new StationStatus { Soc = 50, AcXboost = 1, AcOutVol = 230000, AcOutFreq = 1, AcEnabled = true };
-            var body = EcoFlow.AcCommand("R621ZAB5XG00000", last, false);
+            var body = EcoFlow.AcCommand("R621ZAB5XG00000", false);
             var flat = new System.Collections.Generic.Dictionary<string, string>(EcoFlow.Flatten(body));
             Xunit.Assert.Equal("0", flat["params.enabled"]);
-            Xunit.Assert.Equal("230000", flat["params.out_voltage"]);
             Xunit.Assert.Equal("5", flat["moduleType"]);
             Xunit.Assert.Equal("acOutCfg", flat["operateType"]);
+        }
+
+        [Fact]
+        public void AcCommandChangesOnlyOnOff()
+        {
+            // RIVER 2 Pro через ключі віддає mppt.cfgAcOutFreq = 50 і cfgAcOutVol = 230 (Гц і В), а команда чекає
+            // out_freq 1/2. Тож решту не повторюємо, а шлемо «не змінювати» (255 / 4294967295), як у Lumos Wear.
+            var flat = new System.Collections.Generic.Dictionary<string, string>(EcoFlow.Flatten(EcoFlow.AcCommand("R621ZAB5XG00000", true)));
+            Xunit.Assert.Equal("1", flat["params.enabled"]);
+            Xunit.Assert.Equal("255", flat["params.xboost"]);
+            Xunit.Assert.Equal("255", flat["params.out_freq"]);
+            Xunit.Assert.Equal("4294967295", flat["params.out_voltage"]);
+            string json = System.Text.Json.JsonSerializer.Serialize(EcoFlow.AcCommand("R621ZAB5XG00000", false));
+            Xunit.Assert.Contains("\"out_voltage\":4294967295", json);
         }
 
         [Fact]
