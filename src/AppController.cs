@@ -355,8 +355,18 @@ namespace Lumos
             _ecoBusy = true;
             try
             {
-                _station = await FetchStationAsync(Settings);
-                _stationError = null;
+                StationStatus fresh = await FetchStationAsync(Settings);
+                if (fresh.Online)
+                {
+                    _station = fresh;
+                    _stationError = null;
+                }
+                else
+                {
+                    // Хмара віддає старі цифри: лишаємо останні справжні дані з їхнім часом і пишемо, що станція офлайн.
+                    _station ??= fresh;
+                    _stationError = "Станція не на зв'язку з EcoFlow (немає інтернету?)";
+                }
             }
             catch (Exception ex)
             {

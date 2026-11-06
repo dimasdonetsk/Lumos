@@ -30,6 +30,18 @@ namespace Lumos
         /// <summary>Чи ввімкнені розетки 220 В (null — станція не повідомила).</summary>
         public bool? AcEnabled { get; init; }
 
+        /// <summary>
+        /// Станція на зв'язку з хмарою EcoFlow. Коли зникає інтернет (часто разом зі світлом), хмара далі
+        /// віддає останні збережені цифри — тоді їм не віримо.
+        /// </summary>
+        public bool Online { get; init; } = true;
+
+        public StationStatus With(bool online) => new()
+        {
+            Soc = Soc, AcInW = AcInW, SolarW = SolarW, OutW = OutW, DischargeMin = DischargeMin, ChargeMin = ChargeMin,
+            At = At, AcEnabled = AcEnabled, Online = online,
+        };
+
         public int InW => AcInW + SolarW;
         public bool Charging => InW - OutW > 10 && Soc < 100;
         public bool Discharging => OutW > InW + 5;
@@ -151,7 +163,17 @@ namespace Lumos
         {
             JsonElement data = await SignedGetAsync(host, accessKey, secretKey, "/iot-open/sign/device/quota/all",
                 new Dictionary<string, string> { ["sn"] = sn }).ConfigureAwait(false);
-            return Parse(data);
+            StationStatus st = Parse(data);
+            bool online = true;
+            try
+            {
+                JsonElement list = await SignedGetAsync(host, accessKey, secretKey, "/iot-open/sign/device/list", null).ConfigureAwait(false);
+                if (list.ValueKind == JsonValueKind.Array)
+                    foreach (JsonElement d in list.EnumerateArray())
+                        if (Str(d, "sn") == sn) { online = Str(d, "online") == "1"; break; }
+            }
+            catch (EcoException) { }
+            return online ? st : st.With(online: false);
         }
 
         /// <summary>
