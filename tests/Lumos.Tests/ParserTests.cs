@@ -105,6 +105,41 @@ namespace Lumos.Tests
         public void RecognisesCancellation() =>
             Assert.True(EmergencyMonitor.IsCancel("Аварійні відключення скасовано, повертаємось до графіків"));
 
+        // Житомиробленерго 19.11.2026 (t.me/ztoe_ua/1918) переказало зведення Укренерго: Житомирщина є лише серед
+        // знеструмлених через обстріли, а аварійні — в інших областях. Раніше Житомир хибно ставав «аварійним».
+        private const string UkrenergoDigest =
+            "Протягом останньої доби росіяни продовжували атаки на об’єкти генерації, системи передачі та розподілу електроенергії.\n" +
+            "Внаслідок обстрілів станом на ранок є знеструмлені споживачі у Дніпропетровській, Житомирській, Запорізькій, Миколаївській " +
+            "та Сумській областях. Енергетики працюють цілодобово, щоб повернути електроенергію споживачам.\n" +
+            "❗ Через пошкодження енергетичного обладнання у Сумській, Полтавській, Харківській та Дніпропетровській областях " +
+            "наразі вимушено застосовуються аварійні відключення.\n" +
+            "У частині областей до кінця доби вимушено діють обмеження:\n" +
+            "• для промисловості — графіки обмеження потужності;\n" +
+            "• для всіх категорій споживачів — графіки погодинних відключень (від 0.5 до 3 черг).\n" +
+            "❗ Актуальні графіки відключень перевіряйте на офіційних сторінках вашого оператора системи розподілу.";
+
+        [Theory]
+        [InlineData("zhytomyrska-oblast", false)]
+        [InlineData("zaporizka-oblast", false)]
+        [InlineData("sumska-oblast", true)]
+        [InlineData("kharkivska-oblast", true)]
+        [InlineData("dnipropetrovska-oblast", true)]
+        public void DigestCountsOnlyForNamedRegions(string region, bool expected)
+        {
+            Assert.Equal(expected, EmergencyMonitor.IsEmergencyIn(UkrenergoDigest, region));
+            // У data.json збирача той самий текст без переносів рядків.
+            Assert.Equal(expected, EmergencyMonitor.IsEmergencyIn(UkrenergoDigest.Replace('\n', ' '), region));
+        }
+
+        [Theory]
+        [InlineData("Застосовуються аварійні відключення.", true)]                         // канал обленерго — про своє
+        [InlineData("У Житомирській області застосовуються аварійні відключення.", true)]
+        [InlineData("На Житомирщині та Київщині застосовано ГАВ.", true)]
+        [InlineData("У Київській області застосовуються аварійні відключення.", false)]
+        [InlineData("Графіки погодинних відключень наразі не діють. На Житомирщині знеструмлення.", true)]
+        public void OwnChannelPosts(string text, bool expected) =>
+            Assert.Equal(expected, EmergencyMonitor.IsEmergencyIn(text, "zhytomyrska-oblast"));
+
         // Пост Житомиробленерго 5.11.2026: у data.json збирача він без переносів, у свіжому парсері — з ними.
         [Theory]
         [InlineData("❗️ Увага! Аварійні відключення! \U0001F4C5 5 листопада 2026 \U0001F50C За розпорядженням Укренерго на Житомирщині " +

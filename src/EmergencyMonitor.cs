@@ -125,7 +125,7 @@ namespace Lumos
             ["rivnenska-oblast"] = new[] { "Рівненськ", "Рівне", "Рівного", "Рівному" },
             ["ternopilska-oblast"] = new[] { "Тернопіл" },
             ["zakarpatska-oblast"] = new[] { "Закарпат" },
-            ["zaporizka-oblast"] = new[] { "Запоріж" },
+            ["zaporizka-oblast"] = new[] { "Запоріж", "Запоріз" },
             ["chernivetska-oblast"] = new[] { "Чернівец", "Чернівц", "Буковин" },
             ["volynska-oblast"] = new[] { "Волин" },
             ["vinnytska-oblast"] = new[] { "Вінниц" },
@@ -139,6 +139,10 @@ namespace Lumos
         };
 
         private static readonly string[] Nationwide = { "усіх регіонах", "всіх регіонах", "усіх областях", "всіх областях", "по всій країні", "по всій Україні" };
+
+        // Будь-яка область (і ті, де графіків немає) — щоб помітити речення про конкретні області, можливо не нашу.
+        private static readonly string[] AnyRegion = RegionStems.Values.SelectMany(s => s)
+            .Concat(new[] { "Херсон", "Донеч", "Донецьк", "Луган", "Крим", "Севастопол" }).Distinct().ToArray();
 
         // Ознаки, що зараз діють аварійні відключення.
         private static readonly Regex EmergencyRx = new(
@@ -202,16 +206,19 @@ namespace Lumos
         {
             var checks = new List<Task<EmergencyInfo?>>();
             // Споживачі Укрзалізниці: канал обленерго їх не стосується, лише команди Укренерго по області.
-            if (UzSource.IsUz(regionId))
-                regionId = UzSource.ToOblenergo(regionId) ?? regionId;
-            else if (RegionChannels.TryGetValue(regionId, out string[]? channels))
+            bool uz = UzSource.IsUz(regionId);
+            if (uz) regionId = UzSource.ToOblenergo(regionId) ?? regionId;
+            RegionStems.TryGetValue(regionId, out string[]? stems);
+            // Канал обленерго пише про свою область, тож згадка не обов'язкова. Але він буває переказує зведення
+            // по країні — тоді речення про аварійні в інших областях відсіює IsEmergencyHere.
+            if (!uz && RegionChannels.TryGetValue(regionId, out string[]? channels))
                 foreach (string ch in channels)
-                    checks.Add(CheckChannelAsync(ch, ch, null, strict));
-            if (RegionStems.TryGetValue(regionId, out string[]? stems))
+                    checks.Add(CheckChannelAsync(ch, ch, stems, mustMention: false, strict));
+            if (stems != null)
             {
-                checks.Add(CheckChannelAsync(Ukrenergo, "Укренерго", stems, strict));
+                checks.Add(CheckChannelAsync(Ukrenergo, "Укренерго", stems, mustMention: true, strict));
                 if (DtekRegions.Contains(regionId))
-                    checks.Add(CheckChannelAsync(Dtek, "ДТЕК", stems, strict));
+                    checks.Add(CheckChannelAsync(Dtek, "ДТЕК", stems, mustMention: true, strict));
             }
 
             EmergencyInfo?[] results = await Task.WhenAll(checks).ConfigureAwait(false);
@@ -231,12 +238,12 @@ namespace Lumos
             return task;
         }
 
-        private static async Task<EmergencyInfo?> CheckChannelAsync(string channel, string sourceName, string[]? mustMention, bool strict)
+        private static async Task<EmergencyInfo?> CheckChannelAsync(string channel, string sourceName, string[]? stems, bool mustMention, bool strict)
         {
             try
             {
                 string html = await PageAsync(channel).ConfigureAwait(false);
-                return Evaluate(ParsePosts(html), sourceName, mustMention, StatusEngine.KyivNow());
+                return Evaluate(ParsePosts(html), sourceName, stems, mustMention, StatusEngine.KyivNow());
             }
             catch (Exception ex) when (!strict)
             {
@@ -281,13 +288,13 @@ namespace Lumos
             return posts;
         }
 
-        private static EmergencyInfo? Evaluate(List<Post> posts, string source, string[]? mustMention, DateTime now)
+        private static EmergencyInfo? Evaluate(List<Post> posts, string source, string[]? stems, bool mustMention, DateTime now)
         {
             // Від найновішого: перший доречний пост вирішує — діють аварійні чи вже ні.
             foreach (Post p in posts.OrderByDescending(p => p.Kyiv))
             {
                 if (now - p.Kyiv > Window) break;
-                if (mustMention != null && !Mentions(p.Text, mustMention)) continue;
+                if (mustMention && stems != null && !Mentions(p.Text, stems)) continue;
 
                 if (CancelRx.IsMatch(p.Text)) return null;
                 // Опублікований погодинний графік (купа інтервалів «08:00 - 11:00») — це звичайні ГПВ, а не аварійні.
@@ -296,7 +303,7 @@ namespace Lumos
                     if (p.Text.Contains("завтра", StringComparison.OrdinalIgnoreCase)) continue;
                     return null;
                 }
-                if (IsEmergency(p.Text))
+                if (stems != null ? IsEmergencyHere(p.Text, stems) : IsEmergency(p.Text))
                 {
                     // Старий пост, а нового немає — аварійні вже не вважаємо чинними.
                     if (now >= ValidUntil(p.Text, p.Kyiv)) return null;
@@ -337,12 +344,39 @@ namespace Lumos
 
         internal static bool IsCancel(string text) => CancelRx.IsMatch(text);
 
+        /// <summary>
+        /// Аварійні діють саме в нашій області: речення про них або не називає областей (канал обленерго пише про своє),
+        /// або серед названих є наша. Зведення «аварійні у Сумській і Харківській областях», переказане
+        /// Житомиробленерго, — не про Житомир.
+        /// </summary>
+        internal static bool IsEmergencyHere(string text, string[] stems)
+        {
+            if (!IsEmergency(text)) return false;
+            bool elsewhere = false;
+            foreach (string s in Phrases(text))
+            {
+                if (!IsEmergency(s)) continue;
+                if (Mentions(s, stems) || !AnyRegion.Any(r => s.Contains(r, StringComparison.Ordinal))) return true;
+                elsewhere = true;
+            }
+            // Ознаки аварійних розкидані по кількох реченнях («Графіки не діють. … знеструмлення») — судимо за постом.
+            return !elsewhere;
+        }
+
+        internal static bool IsEmergencyIn(string text, string regionId) =>
+            RegionStems.TryGetValue(regionId, out string[]? stems) ? IsEmergencyHere(text, stems) : IsEmergency(text);
+
+        private static IEnumerable<string> Phrases(string text) =>
+            PhraseSplitRx.Split(PictoRx.Replace(text, "\n"))
+                .Select(p => Regex.Replace(p, @"\s+", " ").Trim(' ', '-', '–', '—', '•', '·', '*', ':', ','))
+                .Where(p => p.Length > 0);
+
         // Емодзі й піктограми (№, °, ©, ®, ™ лишаємо). Ними в постах часто розділені фрази, тож це межа фрази.
         private static readonly Regex PictoRx = new(@"[\p{So}\p{Cs}︎️‍⃣‼⁉-[№°©®™]]+",
             RegexOptions.CultureInvariant);
         // Межі фраз: кінець речення (крім «м.», «вул.» тощо), перенос рядка, «Нагадаємо:» і подібні вставки.
         private static readonly Regex PhraseSplitRx = new(
-            @"(?<!(?:^|[\s(«])(?:м|с|смт|вул|обл|просп|пров|буд|ім)\.)(?<=[.!?…])\s+|\n" +
+            @"(?<!(?:^|[\s(«])(?:м|с|смт|вул|обл|просп|пров|буд|ім)\.)(?<=[.!?…])\s+|\n|\s*•\s*" +
             @"|\s+(?=(?:Нагадаємо|Нагадуємо|Зверніть увагу|Звертаємо увагу|Просимо|Важливо|Детальніше|Слідкуйте|Стежте)\b)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         private static readonly (Regex Rx, string To)[] Tidy =
@@ -362,10 +396,7 @@ namespace Lumos
         /// </summary>
         internal static string Summary(string text, int max = 110)
         {
-            string[] phrases = PhraseSplitRx.Split(PictoRx.Replace(text, "\n"))
-                .Select(p => Regex.Replace(p, @"\s+", " ").Trim(' ', '-', '–', '—', '•', '·', '*', ':', ','))
-                .Where(p => p.Length > 0)
-                .ToArray();
+            string[] phrases = Phrases(text).ToArray();
             // Короткі фрази — це заголовки («Аварійні відключення!») і дати, вони нічого не додають.
             string? pick = phrases.FirstOrDefault(p => p.Length >= 25 && IsEmergency(p))
                         ?? phrases.FirstOrDefault(p => p.Length >= 25)
